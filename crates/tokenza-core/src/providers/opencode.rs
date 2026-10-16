@@ -11,7 +11,7 @@ use async_trait::async_trait;
 use chrono::Utc;
 use serde_json::Value;
 
-use super::{http, timestamp};
+use super::{home, http, read_json, timestamp};
 use crate::error::check_response;
 use crate::{secrets, Account, Provider, ProviderError, UsageSnapshot, UsageWindow, WindowKind};
 
@@ -31,7 +31,15 @@ fn setting(field: &str, var: &str) -> Option<String> {
 }
 
 /// A bare value is the session id; a full `name=value` pair is passed through as given.
+/// Pasting from DevTools often brings quotes or a `Cookie:` prefix along.
 fn cookie_header(raw: &str) -> String {
+    let raw = raw.trim();
+    let raw = raw
+        .strip_prefix("Cookie:")
+        .or_else(|| raw.strip_prefix("cookie:"))
+        .unwrap_or(raw)
+        .trim()
+        .trim_matches(|c| c == '"' || c == '\'');
     if raw.contains('=') {
         raw.to_string()
     } else {
@@ -39,11 +47,37 @@ fn cookie_header(raw: &str) -> String {
     }
 }
 
+/// The `wrk_…` id, even when the whole console address was pasted.
+fn workspace_id(raw: &str) -> String {
+    let raw = raw.trim().trim_matches(|c| c == '"' || c == '\'');
+    match raw.find("wrk_") {
+        Some(i) => raw[i..]
+            .chars()
+            .take_while(|c| c.is_ascii_alphanumeric() || *c == '_')
+            .collect(),
+        None => raw.to_string(),
+    }
+}
+
 fn credentials() -> Option<(String, String)> {
     Some((
-        setting("workspace_id", WORKSPACE_VAR)?,
+        workspace_id(&setting("workspace_id", WORKSPACE_VAR)?),
         setting("cookie", COOKIE_VAR)?,
     ))
+}
+
+/// Whether the `opencode` CLI is signed in to Go. Only the presence of the entry is checked;
+/// the key itself is never read out of the parsed file.
+fn cli_has_go_login() -> bool {
+    let Some(home) = home() else {
+        return false;
+    };
+    let auth = home
+        .join(".local")
+        .join("share")
+        .join("opencode")
+        .join("auth.json");
+    read_json(&auth).is_some_and(|v| v.get("opencode-go").is_some())
 }
 
 #[async_trait]
@@ -57,7 +91,12 @@ impl Provider for OpenCode {
     }
 
     fn detect(&self) -> Option<Account> {
-        credentials()?;
+        // Without the console cookie there is nothing to fetch, but an installed CLI with a Go
+        // login still counts as found: `fetch` then asks the user to connect instead of
+        // claiming the agent is missing.
+        if credentials().is_none() && !cli_has_go_login() {
+            return None;
+        }
         Some(Account { label: "go".into() })
     }
 
@@ -70,17 +109,26 @@ impl Provider for OpenCode {
             .header("Cookie", cookie_header(&cookie))
             .send()
             .await?;
+        // The console answers 400 when the workspace id is missing or not one of the account's.
+        if resp.status().as_u16() == 400 {
+            return Err(ProviderError::NotLoggedIn);
+        }
         check_response(&resp)?;
         let body: Value = resp.json().await?;
 
         let windows = parse(&body);
         if windows.is_empty() {
+            // `access: null` is the console's way of saying there is no Go subscription.
+            if body.is_null() || body.get("access").is_some_and(Value::is_null) {
+                return Err(ProviderError::NoSubscription);
+            }
             return Err(ProviderError::SchemaChanged("no known usage meters".into()));
         }
         Ok(UsageSnapshot {
             provider: self.id().into(),
             account: acc.label.clone(),
             windows,
+            subscription_ends_at: None,
             fetched_at: Utc::now(),
         })
     }
@@ -148,5 +196,17 @@ mod tests {
     fn bare_cookie_gets_its_name() {
         assert_eq!(cookie_header("abc"), "__Host-console_session=abc");
         assert_eq!(cookie_header("auth=abc"), "auth=abc");
+        assert_eq!(cookie_header(" \"abc\" "), "__Host-console_session=abc");
+        assert_eq!(cookie_header("Cookie: auth=abc"), "auth=abc");
+    }
+
+    #[test]
+    fn workspace_id_is_cut_out_of_pasted_text() {
+        assert_eq!(workspace_id("wrk_ABC123"), "wrk_ABC123");
+        assert_eq!(
+            workspace_id("https://opencode.ai/workspace/wrk_ABC123/go"),
+            "wrk_ABC123"
+        );
+        assert_eq!(workspace_id(" \"wrk_ABC123\" "), "wrk_ABC123");
     }
 }

@@ -5,8 +5,8 @@ const inMs = (ms: number) => new Date(Date.now() + ms).toISOString();
 const ago = (ms: number) => new Date(Date.now() - ms).toISOString();
 const H = 3600_000;
 
-function snap(provider: string, account: string, windows: UsageSnapshot["windows"], agoMs: number): UsageSnapshot {
-  return { provider, account, windows, fetched_at: ago(agoMs) };
+function snap(provider: string, account: string, windows: UsageSnapshot["windows"], agoMs: number, subscriptionInMs?: number): UsageSnapshot {
+  return { provider, account, windows, fetched_at: ago(agoMs), ...(subscriptionInMs !== undefined && { subscription_ends_at: inMs(subscriptionInMs) }) };
 }
 
 /** Browser-only sample data that mirrors the Figma mockups. */
@@ -24,6 +24,8 @@ export function demoState(): AppStateDto {
       crit_pct: 95,
       notify_reset: true,
       autostart: false,
+      hotkey_enabled: true,
+      hotkey: "Ctrl+Alt+T",
       theme: "system",
       lang: "auto",
       tray_style: "ring",
@@ -35,6 +37,8 @@ export function demoState(): AppStateDto {
         { id: "cursor", enabled: true, interval_secs: null, show_in_tray: true, notify: true, hidden_windows: [], alias: null },
         { id: "opencode", enabled: true, interval_secs: null, show_in_tray: true, notify: true, hidden_windows: [], alias: null },
         { id: "commandcode", enabled: true, interval_secs: null, show_in_tray: true, notify: true, hidden_windows: [], alias: null },
+        { id: "devin", enabled: true, interval_secs: null, show_in_tray: true, notify: true, hidden_windows: [], alias: null },
+        { id: "antigravity", enabled: true, interval_secs: null, show_in_tray: true, notify: true, hidden_windows: [], alias: null },
       ],
     },
     providers: [
@@ -52,7 +56,7 @@ export function demoState(): AppStateDto {
         snapshot: snap("codex", "plus", [
           { kind: "Session5h", label: "5 h", used_pct: 78, resets_at: inMs(H + 12 * 60_000) },
           { kind: "Weekly", label: "Week", used_pct: 13, resets_at: inMs(21 * 24 * H) },
-        ], 30_000),
+        ], 30_000, 34 * 24 * H),
       },
       {
         id: "cursor", enabled: true, status: "ok", error: null, secrets: [], last_attempt: ago(120_000),
@@ -77,7 +81,23 @@ export function demoState(): AppStateDto {
           { kind: "Session5h", label: "5 h", used_pct: 9, resets_at: inMs(4 * H) },
           { kind: "Weekly", label: "Week", used_pct: 63, resets_at: inMs(3 * 24 * H) },
           { kind: "Monthly", label: "Month", used_pct: 27, resets_at: inMs(15 * 24 * H) },
-        ], 150_000),
+        ], 150_000, 15 * 24 * H),
+      },
+      {
+        id: "devin", enabled: true, status: "ok", error: null, secrets: [], last_attempt: ago(100_000),
+        poll: { interval_secs: 300, base_secs: 300, min_secs: 300, floor_secs: null, state: "steady", rate_limit_hits: 0, next_refresh_at: inMs(200_000) },
+        snapshot: snap("devin", "Pro", [
+          { kind: "Daily", label: "Day", used_pct: 35, resets_at: inMs(7 * H) },
+          { kind: "Weekly", label: "Week", used_pct: 12, resets_at: inMs(5 * 24 * H) },
+        ], 100_000),
+      },
+      {
+        id: "antigravity", enabled: true, status: "ok", error: null, secrets: [], last_attempt: ago(110_000),
+        poll: { interval_secs: 300, base_secs: 300, min_secs: 300, floor_secs: null, state: "steady", rate_limit_hits: 0, next_refresh_at: inMs(190_000) },
+        snapshot: snap("antigravity", "", [
+          { kind: "Session5h", label: "5 h · gemini-3-pro", used_pct: 58, resets_at: inMs(2 * H) },
+          { kind: "Weekly", label: "Week · gemini-3-pro", used_pct: 21, resets_at: inMs(4 * 24 * H) },
+        ], 110_000),
       },
     ],
   };

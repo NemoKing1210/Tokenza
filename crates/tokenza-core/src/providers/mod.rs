@@ -1,8 +1,10 @@
+pub mod antigravity;
 pub mod claude;
 pub mod codex;
 pub mod commandcode;
 pub mod cursor;
 pub mod custom;
+pub mod devin;
 pub mod opencode;
 
 use std::path::PathBuf;

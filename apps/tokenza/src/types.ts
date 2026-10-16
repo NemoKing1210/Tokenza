@@ -1,6 +1,6 @@
 import type { Lang, LangSetting } from "./i18n";
 
-export type WindowKind = "Session5h" | "Weekly" | "Monthly" | "Credits";
+export type WindowKind = "Session5h" | "Daily" | "Weekly" | "Monthly" | "Credits";
 
 export interface UsageWindow {
   kind: WindowKind;
@@ -14,13 +14,15 @@ export interface UsageSnapshot {
   provider: string;
   account: string;
   windows: UsageWindow[];
+  /** When the paid period runs out or renews; absent for providers that do not report it. */
+  subscription_ends_at?: string;
   fetched_at: string;
 }
 
 export type ProviderStatus = "pending" | "ok" | "error" | "not_found";
 
 export interface ErrorInfo {
-  kind: "NotLoggedIn" | "TokenExpired" | "RateLimited" | "SchemaChanged" | "Offline";
+  kind: "NotLoggedIn" | "TokenExpired" | "NoSubscription" | "RateLimited" | "SchemaChanged" | "Offline";
   message: string;
 }
 
@@ -96,6 +98,9 @@ export interface Settings {
   crit_pct: number;
   notify_reset: boolean;
   autostart: boolean;
+  hotkey_enabled: boolean;
+  /** Accelerator such as "Ctrl+Alt+T". */
+  hotkey: string;
   theme: "system" | "light" | "dark";
   lang: LangSetting;
   tray_style: "ring" | "bars";

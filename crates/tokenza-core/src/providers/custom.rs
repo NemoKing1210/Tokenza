@@ -199,42 +199,52 @@ impl Provider for CustomProvider {
 
     async fn fetch(&self, _acc: &Account) -> Result<UsageSnapshot, ProviderError> {
         let token = secrets::get(&self.def.id, CUSTOM_FIELD).ok_or(ProviderError::NotLoggedIn)?;
-        let auth = &self.def.auth;
-        let req = http_no_redirect()?
-            .get(&self.def.url)
-            .header(ACCEPT, "application/json");
-        let req = match auth.scheme {
-            AuthScheme::Bearer => req.header(AUTHORIZATION, sensitive(format!("Bearer {token}"))?),
-            AuthScheme::Header => {
-                let name = HeaderName::from_bytes(auth.name.as_bytes())
-                    .map_err(|_| ProviderError::SchemaChanged("invalid header name".into()))?;
-                req.header(name, sensitive(token)?)
-            }
-            AuthScheme::Cookie => req.header(COOKIE, sensitive(format!("{}={token}", auth.name))?),
-        };
-        let resp = req.send().await?;
-        check_response(&resp)?;
-        let bytes = resp.bytes().await?;
-        if bytes.len() > MAX_BODY {
-            return Err(ProviderError::SchemaChanged("response is too large".into()));
-        }
-        let body: Value = serde_json::from_slice(&bytes)
-            .map_err(|_| ProviderError::SchemaChanged("response is not JSON".into()))?;
-
-        let windows = parse(&self.def, &body);
-        if windows.is_empty() {
-            return Err(ProviderError::SchemaChanged(
-                "no configured value found".into(),
-            ));
-        }
         Ok(UsageSnapshot {
             provider: self.def.id.clone(),
             // Plan names are not configurable; an empty account shows no plan badge.
             account: String::new(),
-            windows,
+            windows: fetch_windows(&self.def, token).await?,
+            subscription_ends_at: None,
             fetched_at: Utc::now(),
         })
     }
+}
+
+/// One request with the given token, read through the definition's paths. The token is only
+/// ever put into the request header; the app also uses it to try a form before anything is saved.
+pub async fn fetch_windows(
+    def: &CustomDef,
+    token: String,
+) -> Result<Vec<UsageWindow>, ProviderError> {
+    let auth = &def.auth;
+    let req = http_no_redirect()?
+        .get(&def.url)
+        .header(ACCEPT, "application/json");
+    let req = match auth.scheme {
+        AuthScheme::Bearer => req.header(AUTHORIZATION, sensitive(format!("Bearer {token}"))?),
+        AuthScheme::Header => {
+            let name = HeaderName::from_bytes(auth.name.as_bytes())
+                .map_err(|_| ProviderError::SchemaChanged("invalid header name".into()))?;
+            req.header(name, sensitive(token)?)
+        }
+        AuthScheme::Cookie => req.header(COOKIE, sensitive(format!("{}={token}", auth.name))?),
+    };
+    let resp = req.send().await?;
+    check_response(&resp)?;
+    let bytes = resp.bytes().await?;
+    if bytes.len() > MAX_BODY {
+        return Err(ProviderError::SchemaChanged("response is too large".into()));
+    }
+    let body: Value = serde_json::from_slice(&bytes)
+        .map_err(|_| ProviderError::SchemaChanged("response is not JSON".into()))?;
+
+    let windows = parse(def, &body);
+    if windows.is_empty() {
+        return Err(ProviderError::SchemaChanged(
+            "no configured value found".into(),
+        ));
+    }
+    Ok(windows)
 }
 
 /// `/a/b/0` is a JSON pointer; `a.b.0` is the same path written with dots.

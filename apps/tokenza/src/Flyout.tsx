@@ -2,11 +2,13 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperti
 import { selectLang, useCustomProviders, useStore } from "./store";
 import { t, type Key } from "./i18n";
 import { ProviderLogo } from "./Logo";
+import { secretFieldsFor } from "./Connect";
 import { EnterContext, useCountUp } from "./motion";
 import {
   providerName,
   formatDuration,
   formatReset,
+  formatSubscriptionEnd,
   planLabel,
   toneFor,
   windowLabel,
@@ -81,13 +83,14 @@ function PercentRow({ w, pctValue, label, lang, now }: { w: UsageWindow; pctValu
   );
 }
 
-function Banner({ icon, tone, title, hint }: { icon: ReactNode; tone: string; title: string; hint: string }) {
+function Banner({ icon, tone, title, hint, detail }: { icon: ReactNode; tone: string; title: string; hint: string; detail?: string }) {
   return (
     <div className="banner" role="status">
       <span className={`banner-icon text-${tone}`}>{icon}</span>
       <div>
         <div className="banner-title">{title}</div>
         <div className="banner-hint">{hint}</div>
+        {detail && <div className="banner-hint">{detail}</div>}
       </div>
     </div>
   );
@@ -95,15 +98,21 @@ function Banner({ icon, tone, title, hint }: { icon: ReactNode; tone: string; ti
 
 function errorBanner(p: ProviderState, lang: Lang, name: string) {
   const kind = p.error?.kind;
-  const pick = (title: Key, hint: Key, icon: ReactNode, tone: string) => (
-    <Banner icon={icon} tone={tone} title={t(lang, title)} hint={t(lang, hint, { name })} />
+  // Error messages hold only status codes and fixed phrases, never credentials; they tell a changed endpoint from a wrong setup.
+  const pick = (title: Key, hint: Key, icon: ReactNode, tone: string, detail?: string) => (
+    <Banner icon={icon} tone={tone} title={t(lang, title)} hint={t(lang, hint, { name })} detail={detail} />
   );
   switch (kind) {
     case "NotLoggedIn":
+      // Providers fed by credentials typed into Tokenza have no CLI login to refresh.
+      if (secretFieldsFor(p.id).length > 0) return pick("connectTitle", "connectHint", <LockIcon />, "warning");
+      return pick("loginTitle", "loginHint", <LockIcon />, "warning");
     case "TokenExpired":
       return pick("loginTitle", "loginHint", <LockIcon />, "warning");
+    case "NoSubscription":
+      return pick("noSubTitle", "noSubHint", <LockIcon />, "secondary");
     case "SchemaChanged":
-      return pick("schemaTitle", "schemaHint", <AlertIcon />, "critical");
+      return pick("schemaTitle", "schemaHint", <AlertIcon />, "critical", p.error?.message);
     case "RateLimited":
       return pick("rateTitle", "rateHint", <AlertIcon />, "warning");
     default:
@@ -139,6 +148,10 @@ export function ProviderCard({ p, lang, now, index = 0, pref }: { p: ProviderSta
             <UsageRow key={`${w.kind}-${w.label}-${i}`} w={w} lang={lang} now={now} />
           ))}
         </div>
+      )}
+
+      {p.snapshot?.subscription_ends_at && p.status !== "not_found" && (
+        <div className="card-sub">{formatSubscriptionEnd(p.snapshot.subscription_ends_at, now, lang)}</div>
       )}
 
       {p.status === "error" && (
@@ -205,16 +218,19 @@ export function CompactCard({ p, lang, now, index = 0, pref }: { p: ProviderStat
     status = <div className="cstatus text-secondary">{t(lang, "pending")}</div>;
   } else if (p.status === "error") {
     const kind = p.error?.kind;
+    const connect = kind === "NotLoggedIn" && secretFieldsFor(p.id).length > 0;
     const [icon, tone, title] =
       kind === "NotLoggedIn" || kind === "TokenExpired"
-        ? [<LockIcon size={16} />, "warning", t(lang, "loginTitle")]
-        : kind === "SchemaChanged"
+        ? [<LockIcon size={16} />, "warning", t(lang, connect ? "connectTitle" : "loginTitle")]
+        : kind === "NoSubscription"
+          ? [<LockIcon size={16} />, "secondary", t(lang, "noSubTitle")]
+          : kind === "SchemaChanged"
           ? [<AlertIcon size={16} />, "critical", t(lang, "schemaTitle")]
           : kind === "RateLimited"
             ? [<AlertIcon size={16} />, "warning", t(lang, "rateTitle")]
             : [<OfflineIcon size={16} />, "secondary", t(lang, "offlineTitle")];
     status = (
-      <div className="cstatus" role="status" title={t(lang, kind === "SchemaChanged" ? "schemaHint" : "offlineHint", { name })}>
+      <div className="cstatus" role="status" title={t(lang, kind === "NoSubscription" ? "noSubHint" : kind === "SchemaChanged" ? "schemaHint" : connect ? "connectHint" : "offlineHint", { name }) + (kind === "SchemaChanged" && p.error ? ` (${p.error.message})` : "")}>
         <span className={`text-${tone}`}>{icon}</span>
         <span className="cstatus-title">{title}</span>
         <button className="link-btn" onClick={refresh}>
@@ -237,6 +253,9 @@ export function CompactCard({ p, lang, now, index = 0, pref }: { p: ProviderStat
             <CompactRow key={`${w.kind}-${w.label}-${i}`} w={w} lang={lang} now={now} />
           ))}
         </div>
+      )}
+      {p.snapshot?.subscription_ends_at && p.status !== "not_found" && (
+        <div className="ccard-sub">{formatSubscriptionEnd(p.snapshot.subscription_ends_at, now, lang)}</div>
       )}
       {status}
     </section>

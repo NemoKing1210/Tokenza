@@ -3,7 +3,7 @@ import { Switch } from "@fluentui/react-components";
 import { selectLang, useStore } from "./store";
 import { t, type Lang } from "./i18n";
 import { planLabel, providerName, toneFor, windowLabel } from "./format";
-import { ConnectSection, CustomActions, CustomForm } from "./Connect";
+import { ConnectSection, CustomActions, CustomForm, secretFieldsFor } from "./Connect";
 import { ProviderLogo } from "./Logo";
 import { ChevronDown, GripIcon } from "./icons";
 import { BASE_OPTIONS, SecondsSelect } from "./UpdatePane";
@@ -16,9 +16,11 @@ const SOURCES: Record<string, string> = {
   cursor: "%APPDATA%\\Cursor\\…\\state.vscdb  →  cursor.com",
   opencode: "OPENCODE_GO_WORKSPACE_ID + OPENCODE_GO_AUTH_COOKIE  →  opencode.ai",
   commandcode: "%USERPROFILE%\\.commandcode\\auth.json  →  api.commandcode.ai",
+  devin: "%APPDATA%\\Devin\\credentials.toml  →  server.codeium.com",
+  antigravity: "%USERPROFILE%\\.gemini\\antigravity-cli\\antigravity-oauth-token  →  cloudcode-pa.googleapis.com",
 };
 
-const DEFAULT_ORDER = ["claude", "codex", "cursor", "opencode", "commandcode"];
+const DEFAULT_ORDER = ["claude", "codex", "cursor", "opencode", "commandcode", "devin", "antigravity"];
 
 const hostOf = (url: string) => {
   try {
@@ -42,12 +44,17 @@ function statusOf(st: ProviderState | undefined, enabled: boolean, lang: Lang): 
     case "error":
       switch (st.error?.kind) {
         case "NotLoggedIn":
+          if (secretFieldsFor(st.id).length > 0) return { tone: "warn", text: t(lang, "connectTitle") };
+          return { tone: "warn", text: t(lang, "loginTitle") };
         case "TokenExpired":
           return { tone: "warn", text: t(lang, "loginTitle") };
         case "RateLimited":
           return { tone: "warn", text: t(lang, "rateTitle") };
+        case "NoSubscription":
+          return { tone: "idle", text: t(lang, "noSubTitle") };
         case "SchemaChanged":
-          return { tone: "bad", text: t(lang, "schemaTitle") };
+          // The cause (an HTTP status or a fixed phrase, never a credential) tells a changed endpoint from a wrong setup.
+          return { tone: "bad", text: `${t(lang, "schemaTitle")}: ${(st.error.message ?? "").replace(/^response schema changed:\s*/, "")}` };
         default:
           return { tone: "idle", text: t(lang, "offlineTitle") };
       }

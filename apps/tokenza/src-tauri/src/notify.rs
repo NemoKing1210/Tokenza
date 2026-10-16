@@ -153,6 +153,7 @@ mod tests {
                 resets_at: Some(resets),
                 detail: None,
             }],
+            subscription_ends_at: None,
             fetched_at: Utc::now(),
         });
         let mut settings = Settings::default();

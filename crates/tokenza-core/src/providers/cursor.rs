@@ -101,6 +101,8 @@ impl Provider for Cursor {
             provider: self.id().into(),
             account,
             windows,
+            // The billing cycle end is already the monthly window's reset.
+            subscription_ends_at: None,
             fetched_at: Utc::now(),
         })
     }

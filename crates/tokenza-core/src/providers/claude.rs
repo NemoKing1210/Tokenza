@@ -19,6 +19,20 @@ fn oauth() -> Option<Value> {
     creds.get("claudeAiOauth").cloned()
 }
 
+/// Newer Claude Code versions leave `subscriptionType` out of the credentials file, but the
+/// plan is cached (read-only here) in the profile Claude Code keeps in `~/.claude.json`.
+fn profile_plan() -> Option<String> {
+    let cfg = read_json(&home()?.join(".claude.json"))?;
+    plan_from_profile(&cfg)
+}
+
+fn plan_from_profile(cfg: &Value) -> Option<String> {
+    let kind = cfg.pointer("/oauthAccount/organizationType")?.as_str()?;
+    // "claude_pro" -> "pro", "claude_max" -> "max"; an unrecognised value still beats nothing.
+    let plan = kind.strip_prefix("claude_").unwrap_or(kind);
+    (!plan.is_empty()).then(|| plan.to_string())
+}
+
 #[async_trait]
 impl Provider for Claude {
     fn id(&self) -> &str {
@@ -35,8 +49,9 @@ impl Provider for Claude {
         let label = o
             .get("subscriptionType")
             .and_then(Value::as_str)
-            .unwrap_or("claude.ai")
-            .to_string();
+            .map(str::to_string)
+            .or_else(profile_plan)
+            .unwrap_or_else(|| "claude.ai".into());
         Some(Account { label })
     }
 
@@ -72,6 +87,8 @@ impl Provider for Claude {
             provider: self.id().into(),
             account: acc.label.clone(),
             windows,
+            // Neither the usage endpoint nor the local login files say when the plan ends.
+            subscription_ends_at: None,
             fetched_at: Utc::now(),
         })
     }
@@ -101,6 +118,23 @@ fn parse(body: &Value) -> Vec<UsageWindow> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn plan_comes_from_the_cached_profile() {
+        let pro = serde_json::json!({"oauthAccount": {"organizationType": "claude_pro"}});
+        assert_eq!(plan_from_profile(&pro).as_deref(), Some("pro"));
+        let max = serde_json::json!({"oauthAccount": {"organizationType": "claude_max"}});
+        assert_eq!(plan_from_profile(&max).as_deref(), Some("max"));
+    }
+
+    #[test]
+    fn no_plan_without_a_usable_profile() {
+        assert_eq!(plan_from_profile(&serde_json::json!({})), None);
+        let null = serde_json::json!({"oauthAccount": {"organizationType": null}});
+        assert_eq!(plan_from_profile(&null), None);
+        let empty = serde_json::json!({"oauthAccount": {"organizationType": "claude_"}});
+        assert_eq!(plan_from_profile(&empty), None);
+    }
 
     #[test]
     fn parses_windows_and_skips_null() {

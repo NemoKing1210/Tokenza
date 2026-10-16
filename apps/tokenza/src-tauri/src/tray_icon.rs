@@ -23,7 +23,7 @@ impl Levels {
             let Some(p) = w.used_pct else { continue };
             l.worst = max(l.worst, p);
             match w.kind {
-                WindowKind::Session5h => l.session = max(l.session, p),
+                WindowKind::Session5h | WindowKind::Daily => l.session = max(l.session, p),
                 WindowKind::Weekly | WindowKind::Monthly => l.weekly = max(l.weekly, p),
                 WindowKind::Credits => {}
             }

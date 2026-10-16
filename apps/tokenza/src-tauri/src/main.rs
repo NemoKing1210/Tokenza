@@ -1,6 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod adaptive;
+mod hotkey;
 mod i18n;
 mod notify;
 mod scheduler;
@@ -34,9 +35,36 @@ fn set_settings(app: AppHandle, state: State<AppState>, new: Settings) -> Result
         .save(&state.settings_path)
         .map_err(|e| e.to_string())?;
     sync_autostart(&app, applied.autostart);
+    // A combination another app owns leaves the hotkey unbound; `set_hotkey` is where the UI hears of it.
+    let _ = hotkey::sync(&app, applied.hotkey_enabled, &applied.hotkey);
     tray::apply_language(&app);
     // A freshly enabled provider is polled by the scheduler's next tick; the rest only needs a redraw.
     scheduler::publish(&app);
+    let _ = app.emit("settings-updated", &applied);
+    Ok(applied)
+}
+
+/// Changes the global shortcut. Errors are codes the UI translates: `invalid`, `in_use`.
+#[tauri::command]
+fn set_hotkey(app: AppHandle, state: State<AppState>, accel: String) -> Result<Settings, String> {
+    if hotkey::parse(&accel).is_none() {
+        return Err("invalid".into());
+    }
+    let (enabled, old) = {
+        let g = state.lock();
+        (g.settings.hotkey_enabled, g.settings.hotkey.clone())
+    };
+    // Registration is the only way to learn that another app owns the combination.
+    if hotkey::sync(&app, enabled, &accel).is_err() {
+        let _ = hotkey::sync(&app, enabled, &old);
+        return Err("in_use".into());
+    }
+    let mut next = state.lock().settings.clone();
+    next.hotkey = accel;
+    let applied = state.apply_settings(next);
+    applied
+        .save(&state.settings_path)
+        .map_err(|e| e.to_string())?;
     let _ = app.emit("settings-updated", &applied);
     Ok(applied)
 }
@@ -127,6 +155,43 @@ fn save_custom_provider(
     Ok(())
 }
 
+/// One line of a form test: what the entered paths read from the live response.
+#[derive(serde::Serialize)]
+struct TestWindow {
+    label: String,
+    used_pct: Option<f32>,
+}
+
+/// Tries a custom provider definition against its URL without saving anything, so wrong paths
+/// show up while the form is still open. A blank `token` falls back to the stored one when editing.
+#[tauri::command]
+async fn test_custom_provider(
+    mut def: CustomDef,
+    token: Option<String>,
+) -> Result<Vec<TestWindow>, String> {
+    if def.id.is_empty() {
+        def.id = format!("{}test", tokenza_core::providers::custom::ID_PREFIX);
+    }
+    def.normalize();
+    def.validate()?;
+    let token = token
+        .map(|t| t.trim().to_string())
+        .filter(|t| !t.is_empty())
+        .or_else(|| tokenza_core::secrets::get(&def.id, tokenza_core::secrets::CUSTOM_FIELD))
+        .ok_or("empty")?;
+    check_secret(&token)?;
+    let windows = tokenza_core::providers::custom::fetch_windows(&def, token)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(windows
+        .into_iter()
+        .map(|w| TestWindow {
+            label: w.label,
+            used_pct: w.used_pct,
+        })
+        .collect())
+}
+
 #[tauri::command]
 fn remove_custom_provider(
     app: AppHandle,
@@ -208,6 +273,7 @@ fn main() {
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
             tray::show_flyout(app, None);
         }))
+        .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_autostart::init(
             MacosLauncher::LaunchAgent,
@@ -217,10 +283,12 @@ fn main() {
             get_state,
             refresh,
             set_settings,
+            set_hotkey,
             reset_tuning,
             set_provider_secret,
             clear_provider_secret,
             save_custom_provider,
+            test_custom_provider,
             remove_custom_provider,
             send_test_notification,
             set_flyout_height,
@@ -241,6 +309,14 @@ fn main() {
             apply_backdrops(&handle);
             tray::setup(&handle)?;
             tray::apply_language(&handle);
+            let state = handle.state::<AppState>();
+            let (want, accel) = {
+                let g = state.lock();
+                (g.settings.hotkey_enabled, g.settings.hotkey.clone())
+            };
+            if let Err(e) = hotkey::sync(&handle, want, &accel) {
+                eprintln!("could not register the {accel} hotkey: {e}");
+            }
             scheduler::spawn(handle);
             Ok(())
         })

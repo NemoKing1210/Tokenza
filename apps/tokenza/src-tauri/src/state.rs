@@ -91,11 +91,20 @@ pub struct Notified {
     pub resets_at: Option<DateTime<Utc>>,
 }
 
+/// Where the flyout opens, in physical pixels.
+#[derive(Clone, Copy, Debug)]
+pub enum FlyoutAnchor {
+    /// Next to the tray icon rect `(x, y, width, height)`.
+    Tray(i32, i32, u32, u32),
+    /// In the middle of the work area of the monitor containing this point (global hotkey).
+    Centered(i32, i32),
+}
+
 pub struct Inner {
     pub providers: Vec<ProviderState>,
     pub settings: Settings,
     pub notified: HashMap<String, Notified>,
-    pub flyout_anchor: Option<(i32, i32, u32, u32)>,
+    pub flyout_anchor: Option<FlyoutAnchor>,
     pub last_hidden: Option<Instant>,
     /// Last tuning file content, to write only on change.
     pub tuning_saved: String,

@@ -10,6 +10,9 @@ pub enum ProviderError {
     /// Carries the provider's `Retry-After` when it sent one.
     #[error("rate limited by the provider")]
     RateLimited(Option<std::time::Duration>),
+    /// Signed in, but the account has no active plan to report limits for.
+    #[error("no active subscription")]
+    NoSubscription,
     #[error("response schema changed: {0}")]
     SchemaChanged(String),
     #[error("offline: {0}")]
@@ -22,6 +25,7 @@ impl ProviderError {
             Self::NotLoggedIn => "NotLoggedIn",
             Self::TokenExpired => "TokenExpired",
             Self::RateLimited(_) => "RateLimited",
+            Self::NoSubscription => "NoSubscription",
             Self::SchemaChanged(_) => "SchemaChanged",
             Self::Offline(_) => "Offline",
         }

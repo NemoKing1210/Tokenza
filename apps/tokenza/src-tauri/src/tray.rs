@@ -9,7 +9,7 @@ use tauri::{
 };
 
 use crate::i18n;
-use crate::state::AppState;
+use crate::state::{AppState, FlyoutAnchor};
 use crate::tray_icon::{self, Levels};
 
 const TRAY_ID: &str = "main";
@@ -162,11 +162,35 @@ fn toggle_flyout(app: &AppHandle, anchor: (i32, i32, u32, u32)) {
         .last_hidden
         .is_some_and(|t| t.elapsed() < REOPEN_GUARD);
     if !recently_hidden {
-        show_flyout(app, Some(anchor));
+        let (x, y, w, h) = anchor;
+        show_flyout(app, Some(FlyoutAnchor::Tray(x, y, w, h)));
     }
 }
 
-pub fn show_flyout(app: &AppHandle, anchor: Option<(i32, i32, u32, u32)>) {
+/// Global hotkey: opens the flyout in the middle of the screen the mouse is on, or closes it.
+pub fn toggle_flyout_centered(app: &AppHandle) {
+    let Some(w) = app.get_webview_window("flyout") else {
+        return;
+    };
+    if w.is_visible().unwrap_or(false) {
+        hide_flyout(app);
+        return;
+    }
+    // The cursor's monitor is the "active" screen; fall back to the primary one.
+    let point = app
+        .cursor_position()
+        .ok()
+        .map(|p| (p.x as i32, p.y as i32))
+        .or_else(|| {
+            let m = w.primary_monitor().ok().flatten()?;
+            Some((m.position().x, m.position().y))
+        });
+    if let Some((x, y)) = point {
+        show_flyout(app, Some(FlyoutAnchor::Centered(x, y)));
+    }
+}
+
+pub fn show_flyout(app: &AppHandle, anchor: Option<FlyoutAnchor>) {
     let Some(w) = app.get_webview_window("flyout") else {
         return;
     };
@@ -190,7 +214,12 @@ pub fn place(w: &WebviewWindow) {
     let (ww, wh) = (size.width as i32, size.height as i32);
 
     let monitor = anchor
-        .and_then(|(x, y, _, _)| app.monitor_from_point(x as f64, y as f64).ok().flatten())
+        .and_then(|a| {
+            let (x, y) = match a {
+                FlyoutAnchor::Tray(x, y, _, _) | FlyoutAnchor::Centered(x, y) => (x, y),
+            };
+            app.monitor_from_point(x as f64, y as f64).ok().flatten()
+        })
         .or_else(|| w.primary_monitor().ok().flatten());
     let Some(m) = monitor else { return };
     let wa = m.work_area();
@@ -199,7 +228,8 @@ pub fn place(w: &WebviewWindow) {
 
     let margin = (GAP as f64 * scale) as i32;
     let (mut x, mut y) = match anchor {
-        Some((ax, ay, aw, ah)) => {
+        Some(FlyoutAnchor::Centered(..)) => ((left + right - ww) / 2, (top + bottom - wh) / 2),
+        Some(FlyoutAnchor::Tray(ax, ay, aw, ah)) => {
             let cx = ax + aw as i32 / 2;
             let ny = if ay > (top + bottom) / 2 {
                 ay - wh - margin

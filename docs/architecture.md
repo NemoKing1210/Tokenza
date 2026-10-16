@@ -26,7 +26,7 @@ Everything that knows about a specific AI agent lives here, and nothing here kno
 - `Provider` trait (`provider.rs`): `detect()` finds a local login without touching the network; `fetch()` calls the provider's usage endpoint and returns a `UsageSnapshot`.
 - Data model (`model.rs`): a snapshot is a list of `UsageWindow`s (5-hour session, weekly, monthly, credits), each with an optional used percentage and reset time. Snapshots never contain tokens.
 - `ProviderError` (`error.rs`): typed failures (`NotLoggedIn`, `TokenExpired`, `RateLimited`, `SchemaChanged`, `Offline`). The UI chooses the card text and the suggested action from the kind.
-- `providers/`: one module per agent (`claude`, `codex`, `cursor`, `opencode`, `commandcode`). Each reads its credentials per request, sends one HTTPS request to a single fixed domain, and parses the response into windows.
+- `providers/`: one module per agent (`claude`, `codex`, `cursor`, `opencode`, `commandcode`, `devin`, `antigravity`). Each reads its credentials per request, sends one HTTPS request to a single fixed domain, and parses the response into windows.
 
 ### User-entered credentials and custom providers
 
@@ -46,6 +46,7 @@ Everything that knows about a specific AI agent lives here, and nothing here kno
 | `settings.rs` | User settings, persisted as `settings.json` in the app config directory           |
 | `notify.rs`   | Threshold and "limit available again" toasts, deduplicated per reset cycle        |
 | `tray.rs`     | Tray icon, menu and the flyout window                                             |
+| `hotkey.rs`   | Configurable global shortcut (default Ctrl+Alt+T) that toggles the centered flyout |
 | `tray_icon.rs`| Renders the ring/bars tray indicator with `tiny-skia`                             |
 | `i18n.rs`     | Strings for the tray menu, toasts and window titles; system-language detection    |
 

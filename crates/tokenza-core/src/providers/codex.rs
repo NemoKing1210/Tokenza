@@ -3,6 +3,7 @@
 use std::time::Duration;
 
 use async_trait::async_trait;
+use base64::Engine;
 use chrono::{DateTime, Utc};
 use serde_json::Value;
 
@@ -66,9 +67,26 @@ impl Provider for Codex {
             provider: self.id().into(),
             account,
             windows,
+            subscription_ends_at: subscription_end(&t),
             fetched_at: Utc::now(),
         })
     }
+}
+
+/// The paid-through date is a claim in the login's `id_token`; only that date is read from it.
+/// It is `null` for free accounts and can be as old as the last time Codex refreshed the login.
+fn subscription_end(tokens: &Value) -> Option<DateTime<Utc>> {
+    let payload = tokens.get("id_token")?.as_str()?.split('.').nth(1)?;
+    let bytes = base64::engine::general_purpose::URL_SAFE_NO_PAD
+        .decode(payload.trim_end_matches('='))
+        .ok()?;
+    let claims: Value = serde_json::from_slice(&bytes).ok()?;
+    let until = claims
+        .pointer("/https:~1~1api.openai.com~1auth/chatgpt_subscription_active_until")?
+        .as_str()?;
+    DateTime::parse_from_rfc3339(until)
+        .ok()
+        .map(|d| d.with_timezone(&Utc))
 }
 
 fn parse(body: &Value) -> Vec<UsageWindow> {
@@ -138,6 +156,34 @@ fn parse(body: &Value) -> Vec<UsageWindow> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn tokens_with_claims(claims: Value) -> Value {
+        let payload = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(claims.to_string());
+        serde_json::json!({"id_token": format!("h.{payload}.s")})
+    }
+
+    #[test]
+    fn subscription_end_comes_from_the_id_token_claim() {
+        let t = tokens_with_claims(serde_json::json!({
+            "https://api.openai.com/auth": {
+                "chatgpt_subscription_active_until": "2026-11-20T10:30:00+00:00"
+            }
+        }));
+        assert_eq!(subscription_end(&t).unwrap().timestamp(), 1_795_170_600);
+    }
+
+    #[test]
+    fn no_subscription_end_for_free_or_unreadable_logins() {
+        let free = tokens_with_claims(serde_json::json!({
+            "https://api.openai.com/auth": {"chatgpt_subscription_active_until": null}
+        }));
+        assert_eq!(subscription_end(&free), None);
+        assert_eq!(subscription_end(&serde_json::json!({})), None);
+        assert_eq!(
+            subscription_end(&serde_json::json!({"id_token": "garbage"})),
+            None
+        );
+    }
 
     #[test]
     fn classifies_windows_by_length() {

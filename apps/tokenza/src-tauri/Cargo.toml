@@ -15,6 +15,7 @@ tauri-build = { version = "2", features = [] }
 tauri = { version = "2", features = ["tray-icon", "image-png"] }
 tauri-plugin-notification = "2"
 tauri-plugin-autostart = "2"
+tauri-plugin-global-shortcut = "2"
 tauri-plugin-single-instance = "2"
 window-vibrancy = "0.6"
 sys-locale = "0.3"

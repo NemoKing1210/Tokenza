@@ -3,6 +3,7 @@ import { Select, Switch } from "@fluentui/react-components";
 import { useStore } from "./store";
 import { t, type Key, type Lang } from "./i18n";
 import type { AuthScheme, CustomDef, CustomWindowDef } from "./types";
+import { PRESETS } from "./presets";
 
 /** Credential fields of the built-in providers that accept a value typed into the app. Custom ones have a single token. */
 const BUILTIN_FIELDS: Record<string, string[]> = {
@@ -115,7 +116,7 @@ export function ConnectSection({ id, secrets, lang }: { id: string; secrets: str
 
 const blankWindow = (): CustomWindowDef => ({ label: "", kind: "Monthly", used_path: "", limit_path: null, remaining: false, resets_at_path: null });
 
-const KIND_LABEL: Record<CustomWindowDef["kind"], Key> = { Session5h: "winSession", Weekly: "winWeekly", Monthly: "winMonthly" };
+const KIND_LABEL: Record<CustomWindowDef["kind"], Key> = { Session5h: "winSession", Daily: "winDaily", Weekly: "winWeekly", Monthly: "winMonthly" };
 
 function WindowEditor({ w, lang, onChange, onRemove, canRemove }: { w: CustomWindowDef; lang: Lang; onChange: (w: CustomWindowDef) => void; onRemove: () => void; canRemove: boolean }) {
   const text = (key: Key, value: string, set: (v: string) => void, placeholder?: string) => (
@@ -158,6 +159,7 @@ function WindowEditor({ w, lang, onChange, onRemove, canRemove }: { w: CustomWin
 /** Form for a provider the app has no built-in support for: one HTTPS request, JSON paths to the numbers. */
 export function CustomForm({ initial, lang, onClose }: { initial: CustomDef | null; lang: Lang; onClose: () => void }) {
   const saveCustom = useStore((s) => s.saveCustom);
+  const testCustom = useStore((s) => s.testCustom);
   const [name, setName] = useState(initial?.name ?? "");
   const [url, setUrl] = useState(initial?.url ?? "");
   const [scheme, setScheme] = useState<AuthScheme>(initial?.auth.scheme ?? "bearer");
@@ -166,17 +168,50 @@ export function CustomForm({ initial, lang, onClose }: { initial: CustomDef | nu
   const [windows, setWindows] = useState<CustomWindowDef[]>(initial?.windows ?? [blankWindow()]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [preset, setPreset] = useState<string | null>(null);
+  const [showToken, setShowToken] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [test, setTest] = useState<{ ok: boolean; text: string } | null>(null);
+
+  const current = (): CustomDef => ({
+    id: initial?.id ?? "",
+    name,
+    url,
+    auth: { scheme, name: scheme === "bearer" ? "" : authName },
+    windows,
+  });
+
+  /** Fills every field from a preset (or empties them); the token stays, it is the user's. */
+  const applyPreset = (id: string | null) => {
+    const p = PRESETS.find((x) => x.id === id);
+    setPreset(id);
+    setName(p?.def.name ?? "");
+    setUrl(p?.def.url ?? "");
+    setScheme(p?.def.auth.scheme ?? "bearer");
+    setAuthName(p?.def.auth.name ?? "");
+    setWindows(p ? p.def.windows.map((w) => ({ ...w })) : [blankWindow()]);
+    setError(null);
+    setTest(null);
+  };
+
+  const runTest = async () => {
+    setTesting(true);
+    setTest(null);
+    const res = await testCustom(current(), token.trim() ? token : null);
+    setTesting(false);
+    if (res.windows) {
+      const lines = res.windows.map((w) => `${w.label} ${w.used_pct === null ? "—" : `${Math.round(w.used_pct)}%`}`).join(" · ");
+      setTest({ ok: true, text: t(lang, "customTestOk", { x: lines }) });
+    } else {
+      const raw = (res.error ?? "").replace(/^Error:\s*/, "");
+      setTest({ ok: false, text: raw === "empty" ? t(lang, "customTestNeedToken") : t(lang, "customTestFail", { msg: raw }) });
+    }
+  };
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     setBusy(true);
-    const def: CustomDef = {
-      id: initial?.id ?? "",
-      name,
-      url,
-      auth: { scheme, name: scheme === "bearer" ? "" : authName },
-      windows,
-    };
+    const def = current();
     const err = await saveCustom(def, token.trim() ? token : null);
     setBusy(false);
     if (err) setError(errorText(lang, err));
@@ -193,6 +228,26 @@ export function CustomForm({ initial, lang, onClose }: { initial: CustomDef | nu
     <form className="cform" onSubmit={submit}>
       <div className="cform-title">{t(lang, initial ? "customTitleEdit" : "customTitleNew")}</div>
       <p className="dline-hint">{t(lang, "customLead")}</p>
+      {!initial && (
+        <div className="cpresets" role="group" aria-label={t(lang, "customPresets")}>
+          <span className="cpresets-label">{t(lang, "customPresets")}</span>
+          {PRESETS.map((p) => (
+            <button key={p.id} type="button" className={preset === p.id ? "btn btn-sm btn-accent" : "btn btn-sm"} aria-pressed={preset === p.id} onClick={() => applyPreset(p.id)}>
+              {p.name}
+            </button>
+          ))}
+          {preset && (
+            <button type="button" className="btn btn-sm" onClick={() => applyPreset(null)}>
+              {t(lang, "customPresetBlank")}
+            </button>
+          )}
+        </div>
+      )}
+      {preset && (
+        <p className="dline-hint">
+          {t(lang, "customPresetKey", { site: PRESETS.find((p) => p.id === preset)!.site })} {t(lang, "customPresetNote")}
+        </p>
+      )}
       <div className="cform-grid">
         <label className="cfield">
           <span>{t(lang, "customName")}</span>
@@ -220,16 +275,21 @@ export function CustomForm({ initial, lang, onClose }: { initial: CustomDef | nu
         )}
         <label className="cfield cfield-wide">
           <span>{t(lang, "customToken")}</span>
-          <input
-            className="field"
-            type="password"
-            value={token}
-            autoComplete="off"
-            spellCheck={false}
-            required={!initial}
-            placeholder={initial ? t(lang, "customTokenKeep") : ""}
-            onChange={(e) => setToken(e.target.value)}
-          />
+          <div className="token-row">
+            <input
+              className="field"
+              type={showToken ? "text" : "password"}
+              value={token}
+              autoComplete="off"
+              spellCheck={false}
+              required={!initial}
+              placeholder={initial ? t(lang, "customTokenKeep") : ""}
+              onChange={(e) => setToken(e.target.value)}
+            />
+            <button type="button" className="btn btn-sm" aria-pressed={showToken} onClick={() => setShowToken(!showToken)}>
+              {t(lang, showToken ? "customHide" : "customShow")}
+            </button>
+          </div>
         </label>
       </div>
 
@@ -256,7 +316,15 @@ export function CustomForm({ initial, lang, onClose }: { initial: CustomDef | nu
           {error}
         </div>
       )}
+      {test && (
+        <div className={test.ok ? "cform-ok" : "cform-error"} role="status">
+          {test.text}
+        </div>
+      )}
       <div className="cform-actions">
+        <button type="button" className="btn btn-sm cform-test" disabled={testing || !url.trim()} onClick={() => void runTest()}>
+          {t(lang, testing ? "customTesting" : "customTest")}
+        </button>
         <button type="button" className="btn btn-sm" onClick={onClose}>
           {t(lang, "customCancel")}
         </button>

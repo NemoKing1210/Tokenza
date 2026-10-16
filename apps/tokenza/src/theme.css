@@ -128,6 +128,8 @@ button:focus-visible, .seg:focus-visible { outline: 2px solid var(--accent); out
 .usage-label { font-weight: 500; }
 .usage-pct { font-weight: 600; font-variant-numeric: tabular-nums; }
 .usage-reset, .card-note { font-size: 11px; color: var(--text-2); }
+.card-sub, .ccard-sub { font-size: 11px; color: var(--text-2); }
+.ccard-sub { font-size: 10px; }
 .card-note { font-size: 12px; padding: 4px 0; }
 
 .track { height: 6px; border-radius: 3px; background: var(--bg-track); overflow: hidden; }
@@ -148,6 +150,13 @@ button:focus-visible, .seg:focus-visible { outline: 2px solid var(--accent); out
   font-weight: 500;
 }
 .btn:hover { background: var(--bg-track); }
+.hotkey { display: flex; align-items: center; gap: 8px; }
+.hotkey-btn { display: inline-flex; align-items: center; gap: 4px; align-self: auto; min-height: 32px; }
+.kbd {
+  font: inherit; font-size: 12px; font-weight: 600;
+  padding: 1px 7px; border-radius: 4px;
+  background: var(--bg-track); border: 1px solid var(--border);
+}
 
 .flyout-foot {
   display: flex; align-items: center; justify-content: flex-end;
@@ -457,5 +466,11 @@ button { transition: background-color 0.15s ease, transform 0.12s var(--ease-mov
 .cwin-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .cswitch { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; cursor: pointer; }
 .cform-error { padding: 8px 10px; border-radius: 6px; background: var(--bg-flyout); color: var(--critical); font-size: 12px; overflow-wrap: anywhere; }
+.cform-ok { padding: 8px 10px; border-radius: 6px; background: var(--bg-flyout); color: var(--text); font-size: 12px; overflow-wrap: anywhere; border-left: 3px solid var(--accent); }
 .cform-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.cform-test { margin-right: auto; }
+.cpresets { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.cpresets-label { font-size: 12px; color: var(--text-2); margin-right: 2px; }
+.token-row { display: flex; gap: 8px; align-items: center; }
+.token-row .field { flex: 1; min-width: 0; }
 .cform > .btn { align-self: flex-start; }

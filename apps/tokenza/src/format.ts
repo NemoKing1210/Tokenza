@@ -32,11 +32,20 @@ export function formatReset(resetsAt: string | null, now: number, lang: Lang, cy
   return t(lang, cycle ? "cycleResetsIn" : "resetsIn", { x: formatDuration(ms, lang) });
 }
 
+/** "subscription until 1 Nov 2026", or "subscription ended …" once the date has passed. */
+export function formatSubscriptionEnd(endsAt: string, now: number, lang: Lang): string {
+  const end = new Date(endsAt);
+  const date = end.toLocaleDateString(lang, { day: "numeric", month: "short", year: "numeric" });
+  return t(lang, end.getTime() > now ? "subscriptionUntil" : "subscriptionEnded", { x: date });
+}
+
 export function windowLabel(w: UsageWindow, lang: Lang, short = false): string {
   const suffix = w.label.includes(" · ") ? ` · ${w.label.split(" · ").slice(1).join(" · ")}` : "";
   switch (w.kind) {
     case "Session5h":
       return t(lang, "winSession");
+    case "Daily":
+      return t(lang, "winDaily");
     case "Weekly":
       return t(lang, "winWeekly") + suffix;
     case "Monthly":
@@ -52,6 +61,8 @@ export const PROVIDER_NAMES: Record<string, string> = {
   cursor: "Cursor",
   opencode: "OpenCode",
   commandcode: "Command Code",
+  devin: "Devin",
+  antigravity: "Antigravity",
 };
 
 /** Built-in name, or the name of a user-defined provider. */

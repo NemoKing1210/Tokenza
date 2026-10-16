@@ -3,6 +3,7 @@ import { LOGO_FRAMES, LOGO_PATHS } from "./logoPaths";
 /** Brand colors; marks without one follow the text color so they work on light and dark cards. */
 const BRAND_COLOR: Record<string, string> = {
   claude: "#D97757",
+  antigravity: "#3186FF",
 };
 
 export function ProviderLogo({ id, name, small = false }: { id: string; name: string; small?: boolean }) {

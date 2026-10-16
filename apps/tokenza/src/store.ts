@@ -36,6 +36,10 @@ interface Store {
   clearSecret: (id: string, field: string) => Promise<string | null>;
   saveCustom: (def: CustomDef, token: string | null) => Promise<string | null>;
   removeCustom: (id: string) => Promise<string | null>;
+  /** Resolves to an error code from the backend ("invalid", "in_use"), or null on success. */
+  setHotkey: (accel: string) => Promise<string | null>;
+  /** Tries a provider definition against its URL without saving it. */
+  testCustom: (def: CustomDef, token: string | null) => Promise<{ windows: { label: string; used_pct: number | null }[] | null; error: string | null }>;
   openSettings: () => void;
   hideFlyout: () => void;
   setFlyoutHeight: (h: number) => void;
@@ -146,6 +150,27 @@ export const useStore = create<Store>((set, get) => {
     async removeCustom(id) {
       if (!inTauri) return demoRemoveCustom(set, get, id);
       return attempt(() => call("remove_custom_provider", { id }));
+    },
+
+    async testCustom(def, token) {
+      if (!inTauri) {
+        // Browser preview has no backend: pretend the windows read a few made-up values.
+        return { windows: def.windows.map((w, i) => ({ label: w.label, used_pct: 42 + i * 8 })), error: null };
+      }
+      try {
+        return { windows: await call("test_custom_provider", { def, token }), error: null };
+      } catch (e) {
+        return { windows: null, error: String(e) };
+      }
+    },
+
+    async setHotkey(accel) {
+      if (!inTauri) {
+        const cur = get().data;
+        if (cur) set({ data: { ...cur, settings: { ...cur.settings, hotkey: accel } } });
+        return null;
+      }
+      return attempt(() => call("set_hotkey", { accel }));
     },
 
     openSettings() {

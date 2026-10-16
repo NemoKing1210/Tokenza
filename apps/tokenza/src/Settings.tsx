@@ -1,4 +1,4 @@
-import { useState, type CSSProperties, type ReactNode } from "react";
+import { useState, type CSSProperties, type KeyboardEvent, type ReactNode } from "react";
 import { FluentProvider, Select, Switch, webDarkTheme, webLightTheme } from "@fluentui/react-components";
 import { selectLang, useStore } from "./store";
 import { LANGS, t, type Key, type LangSetting } from "./i18n";
@@ -41,6 +41,89 @@ function TestNotification({ lang }: { lang: Lang }) {
       {result && (
         <p className={result.ok ? "lead" : "lead text-critical"} role="status">
           {result.text}
+        </p>
+      )}
+    </>
+  );
+}
+
+const DEFAULT_HOTKEY = "Ctrl+Alt+T";
+const MODIFIER_KEYS = ["Control", "Alt", "Shift", "Meta", "AltGraph"];
+
+/** The accelerator name the backend parses for a physical key, or null for keys it does not offer. */
+function acceleratorKey(code: string): string | null {
+  if (/^Key[A-Z]$/.test(code)) return code.slice(3);
+  if (/^Digit\d$/.test(code)) return code.slice(5);
+  if (/^F([1-9]|1\d|2[0-4])$/.test(code)) return code;
+  return ["Space", "Tab", "Enter", "Backspace", "Delete", "Insert", "Home", "End", "PageUp", "PageDown", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(code) ? code : null;
+}
+
+function HotkeyRow({ lang, s }: { lang: Lang; s: Settings }) {
+  const setHotkey = useStore((st) => st.setHotkey);
+  const [recording, setRecording] = useState(false);
+  const [error, setError] = useState<Key | null>(null);
+
+  const onKeyDown = async (e: KeyboardEvent<HTMLButtonElement>) => {
+    if (!recording) return;
+    e.preventDefault();
+    if (e.key === "Escape") {
+      setRecording(false);
+      setError(null);
+      return;
+    }
+    if (MODIFIER_KEYS.includes(e.key)) return; // wait for the key that completes the combination
+    const key = acceleratorKey(e.code);
+    if (!key || !(e.ctrlKey || e.altKey || e.metaKey)) {
+      setError("hotkeyInvalid");
+      return;
+    }
+    const accel = [e.ctrlKey && "Ctrl", e.altKey && "Alt", e.shiftKey && "Shift", e.metaKey && "Super", key].filter(Boolean).join("+");
+    const err = await setHotkey(accel);
+    setError(err === "in_use" ? "hotkeyInUse" : err ? "hotkeyInvalid" : null);
+    if (!err) setRecording(false);
+  };
+  const stop = () => {
+    setRecording(false);
+    setError(null);
+  };
+  const reset = async () => {
+    const err = await setHotkey(DEFAULT_HOTKEY);
+    setError(err === "in_use" ? "hotkeyInUse" : err ? "hotkeyInvalid" : null);
+  };
+
+  return (
+    <>
+      <Row title={t(lang, "hotkeyKeys")}>
+        <div className="hotkey">
+          {s.hotkey !== DEFAULT_HOTKEY && !recording && (
+            <button className="btn btn-sm" onClick={reset}>
+              {t(lang, "hotkeyReset")}
+            </button>
+          )}
+          <button
+            className={recording ? "btn btn-accent hotkey-btn" : "btn hotkey-btn"}
+            disabled={!s.hotkey_enabled}
+            aria-label={t(lang, "hotkeyKeys")}
+            onClick={() => {
+              setRecording(true);
+              setError(null);
+            }}
+            onKeyDown={onKeyDown}
+            onBlur={stop}
+          >
+            {recording
+              ? t(lang, "hotkeyPrompt")
+              : s.hotkey.split("+").map((k) => (
+                  <kbd key={k} className="kbd">
+                    {k === "Super" ? "Win" : k}
+                  </kbd>
+                ))}
+          </button>
+        </div>
+      </Row>
+      {error && (
+        <p className="lead text-critical" role="status">
+          {t(lang, error)}
         </p>
       )}
     </>
@@ -138,9 +221,15 @@ export default function SettingsView() {
       </>
     ),
     general: (
-      <Row title={t(lang, "autostart")}>
-        <Switch checked={s.autostart} onChange={(_, d) => saveSettings({ autostart: d.checked })} aria-label={t(lang, "autostart")} />
-      </Row>
+      <>
+        <Row title={t(lang, "autostart")}>
+          <Switch checked={s.autostart} onChange={(_, d) => saveSettings({ autostart: d.checked })} aria-label={t(lang, "autostart")} />
+        </Row>
+        <Row title={t(lang, "hotkey")} hint={t(lang, "hotkeyHint")}>
+          <Switch checked={s.hotkey_enabled} onChange={(_, d) => saveSettings({ hotkey_enabled: d.checked })} aria-label={t(lang, "hotkey")} />
+        </Row>
+        <HotkeyRow lang={lang} s={s} />
+      </>
     ),
     about: (
       <>

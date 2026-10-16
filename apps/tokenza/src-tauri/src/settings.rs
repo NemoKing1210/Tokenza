@@ -15,7 +15,15 @@ fn legacy_schema() -> u32 {
 }
 
 /// Provider ids in default card order.
-pub const KNOWN_PROVIDERS: [&str; 5] = ["claude", "codex", "cursor", "opencode", "commandcode"];
+pub const KNOWN_PROVIDERS: [&str; 7] = [
+    "claude",
+    "codex",
+    "cursor",
+    "opencode",
+    "commandcode",
+    "devin",
+    "antigravity",
+];
 
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(default)]
@@ -74,6 +82,10 @@ pub struct Settings {
     pub crit_pct: f32,
     pub notify_reset: bool,
     pub autostart: bool,
+    /// Global Ctrl+Alt+T shortcut that toggles the flyout in the middle of the screen.
+    pub hotkey_enabled: bool,
+    /// Accelerator of that shortcut, e.g. "Ctrl+Alt+T"; always usable after `normalize`.
+    pub hotkey: String,
     /// "system" | "light" | "dark"
     pub theme: String,
     /// "auto" (follow the system language) or one of `i18n::SUPPORTED`.
@@ -102,6 +114,8 @@ impl Default for Settings {
             crit_pct: 95.0,
             notify_reset: true,
             autostart: false,
+            hotkey_enabled: true,
+            hotkey: crate::hotkey::DEFAULT.into(),
             theme: "system".into(),
             lang: "auto".into(),
             tray_style: "ring".into(),
@@ -122,6 +136,7 @@ impl Default for Settings {
 impl Settings {
     /// Makes sure every known provider has an entry and no unknown or duplicate ones stay.
     pub fn normalize(&mut self) {
+        self.hotkey = crate::hotkey::normalize(&self.hotkey);
         // A hand-edited or damaged definition is dropped rather than polled with a broken request.
         let mut ids: Vec<String> = Vec::new();
         self.custom_providers.retain_mut(|d| {
@@ -283,6 +298,8 @@ impl Settings {
             "cursor" => "Cursor",
             "opencode" => "OpenCode",
             "commandcode" => "Command Code",
+            "devin" => "Devin",
+            "antigravity" => "Antigravity",
             other => self
                 .custom_providers
                 .iter()
@@ -344,7 +361,15 @@ mod tests {
         let ids: Vec<_> = s.providers.iter().map(|p| p.id.as_str()).collect();
         assert_eq!(
             ids,
-            ["cursor", "claude", "codex", "opencode", "commandcode"]
+            [
+                "cursor",
+                "claude",
+                "codex",
+                "opencode",
+                "commandcode",
+                "devin",
+                "antigravity"
+            ]
         );
         assert!(!s.is_enabled("cursor"));
         assert_eq!(s.interval_secs, 60);

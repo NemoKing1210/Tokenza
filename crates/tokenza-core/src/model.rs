@@ -13,12 +13,16 @@ pub struct UsageSnapshot {
     /// Email or plan, never a token.
     pub account: String,
     pub windows: Vec<UsageWindow>,
+    /// When the paid period runs out or renews, for providers that report it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub subscription_ends_at: Option<DateTime<Utc>>,
     pub fetched_at: DateTime<Utc>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum WindowKind {
     Session5h,
+    Daily,
     Weekly,
     Monthly,
     Credits,

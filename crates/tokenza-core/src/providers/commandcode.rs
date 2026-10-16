@@ -112,6 +112,7 @@ impl Provider for CommandCode {
             provider: self.id().into(),
             account,
             windows,
+            subscription_ends_at: sub.as_ref().and_then(|s| s.period_end),
             fetched_at: Utc::now(),
         })
     }
