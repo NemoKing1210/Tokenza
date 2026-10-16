@@ -1,0 +1,71 @@
+name: Release
+
+# Pushing a tag like v0.1.0 builds the NSIS installer and attaches it to a draft
+# GitHub Release. Review the draft, then publish it by hand.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  installer:
+    name: Windows installer
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # A tag that disagrees with the manifests would ship an installer whose
+      # version does not match its release name.
+      - name: Check versions match the tag
+        shell: bash
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          cargo_version=$(grep -m1 '^version' Cargo.toml | sed -E 's/.*"([^"]+)".*/\1/')
+          tauri_version=$(grep -m1 '"version"' apps/tokenza/src-tauri/tauri.conf.json | sed -E 's/.*: *"([^"]+)".*/\1/')
+          npm_version=$(grep -m1 '"version"' apps/tokenza/package.json | sed -E 's/.*: *"([^"]+)".*/\1/')
+          echo "tag=$tag cargo=$cargo_version tauri=$tauri_version npm=$npm_version"
+          for v in "$cargo_version" "$tauri_version" "$npm_version"; do
+            if [ "$v" != "$tag" ]; then
+              echo "::error::Version mismatch: tag is $tag, manifests are $cargo_version / $tauri_version / $npm_version"
+              exit 1
+            fi
+          done
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/tokenza/package-lock.json
+
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Install frontend dependencies
+        working-directory: apps/tokenza
+        run: npm ci
+
+      - name: Run tests
+        working-directory: apps/tokenza
+        run: npm test
+
+      # tauri build runs `npm run build` itself (beforeBuildCommand).
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          projectPath: apps/tokenza
+          tagName: ${{ github.ref_name }}
+          releaseName: Tokenza ${{ github.ref_name }}
+          releaseBody: See [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/${{ github.ref_name }}/CHANGELOG.md) for what changed.
+          releaseDraft: true
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          args: --bundles nsis

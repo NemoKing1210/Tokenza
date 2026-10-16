@@ -62,7 +62,7 @@ These providers do not publish a documented API for subscription usage. Tokenza 
 
 ## Install
 
-Pre-built installers will be published on the [Releases](../../releases) page once available. Until then, build from source (see below).
+Download the latest `Tokenza_*_x64-setup.exe` from the [Releases](../../releases) page and run it. The installer is not code-signed yet, so Windows SmartScreen may warn about an unknown publisher: choose **More info → Run anyway**. You can also build from source (see below).
 
 ## Build from source
 

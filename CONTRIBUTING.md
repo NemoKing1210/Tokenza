@@ -92,6 +92,17 @@ UI strings live in [`apps/tokenza/src/locales`](apps/tokenza/src/locales) (one f
 - To fix a string, edit it in both places if it appears in both.
 - To add a language, copy `en.ts`, translate every key, register the language in `src/i18n.ts` (`LANGS` and the dictionary map) and add a matching table in `i18n.rs`. The existing tests in `i18n.test.ts` check that every language defines every key and placeholder.
 
+## Releasing
+
+Maintainers only. Installers are built by [`release.yml`](.github/workflows/release.yml) when a `v*` tag is pushed.
+
+1. Set the same version in `Cargo.toml` (`[workspace.package]`), `apps/tokenza/src-tauri/tauri.conf.json` and `apps/tokenza/package.json` (refresh the lockfiles), and move the "Unreleased" entries in [CHANGELOG.md](CHANGELOG.md) under a new version heading.
+2. Merge to `main`, then tag and push: `git tag v0.1.0 && git push origin v0.1.0`. A tag containing `-` (for example `v0.2.0-beta.1`) is marked as a pre-release.
+3. The workflow refuses to build when the tag and the three versions disagree. Otherwise it runs the frontend tests, builds the NSIS installer and attaches it to a **draft** release.
+4. Check the draft, install it once on a clean machine, then publish it.
+
+The installer is not code-signed yet, so Windows SmartScreen shows an "unknown publisher" warning on first launch.
+
 ## Reporting bugs
 
 A good report includes the Tokenza version, Windows version, which provider is affected, what you expected and what happened, and any text shown on the provider card. **Never paste tokens, credential files or full API responses that may contain personal data.**
