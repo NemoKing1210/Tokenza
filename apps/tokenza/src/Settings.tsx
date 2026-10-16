@@ -8,12 +8,14 @@ import { Row, Segmented } from "./controls";
 import AboutPane from "./AboutPane";
 import UpdatePane from "./UpdatePane";
 import ProvidersPane from "./ProvidersPane";
+import TrayPane from "./TrayPane";
 import TitleBar from "./TitleBar";
 
-type Section = "providers" | "update" | "notify" | "appearance" | "general" | "about";
+type Section = "providers" | "tray" | "update" | "notify" | "appearance" | "general" | "about";
 
 const NAV: [Section, Key][] = [
   ["providers", "navProviders"],
+  ["tray", "navTray"],
   ["update", "navUpdate"],
   ["notify", "navNotify"],
   ["appearance", "navAppearance"],
@@ -156,6 +158,7 @@ export default function SettingsView() {
 
   const panes: Record<Section, ReactNode> = {
     providers: <ProvidersPane />,
+    tray: <TrayPane />,
     update: <UpdatePane />,
     notify: (
       <>
@@ -205,17 +208,6 @@ export default function SettingsView() {
             options={[
               { value: "standard", label: t(lang, "viewStandard") },
               { value: "compact", label: t(lang, "viewCompact") },
-            ]}
-          />
-        </Row>
-        <Row title={t(lang, "trayStyle")} hint={t(lang, "trayStyleHint")}>
-          <Segmented
-            label={t(lang, "trayStyle")}
-            value={s.tray_style}
-            onChange={(v) => saveSettings({ tray_style: v })}
-            options={[
-              { value: "ring", label: t(lang, "ring") },
-              { value: "bars", label: t(lang, "bars") },
             ]}
           />
         </Row>

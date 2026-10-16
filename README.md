@@ -11,7 +11,7 @@ Tokenza watches **Claude Code**, **Codex**, **Cursor**, **OpenCode** (Go plan), 
 
 ## Features
 
-- **Tray icon** showing your worst limit as a ring, or two bars (5 h and weekly).
+- **Tray icon** showing your worst limit as a ring, two bars (5 h and weekly), a pie or a number. A settings page lets you choose whose limits it follows (all providers, a few, or one) and which periods count.
 - **Flyout** with one card per provider: usage, time until reset, last update. Standard and compact views.
 - **Global hotkey** (`Ctrl`+`Alt`+`T` by default) opens the flyout in the middle of the screen the mouse is on, without touching the tray; press it again to close. Can be turned off or changed in Settings.
 - **Notifications** when usage crosses a warning or critical threshold (once per reset cycle) and when a limit becomes available again.

@@ -47,7 +47,7 @@ Everything that knows about a specific AI agent lives here, and nothing here kno
 | `notify.rs`   | Threshold and "limit available again" toasts, deduplicated per reset cycle        |
 | `tray.rs`     | Tray icon, menu and the flyout window                                             |
 | `hotkey.rs`   | Configurable global shortcut (default Ctrl+Alt+T) that toggles the centered flyout |
-| `tray_icon.rs`| Renders the ring/bars tray indicator with `tiny-skia`                             |
+| `tray_icon.rs`| Renders the ring/bars/pie/number tray indicator with `tiny-skia`                  |
 | `i18n.rs`     | Strings for the tray menu, toasts and window titles; system-language detection    |
 
 Data flow: the scheduler asks a provider for a snapshot, stores it in `AppState`, evaluates notifications, redraws the tray icon and emits an event. The UI fetches the full state on startup (`get_state`) and then reacts to events; user changes go back through `set_settings`.

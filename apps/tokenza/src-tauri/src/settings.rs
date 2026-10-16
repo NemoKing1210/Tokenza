@@ -1,14 +1,15 @@
 use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
-use tokenza_core::CustomDef;
+use tokenza_core::{CustomDef, WindowKind};
 
 use crate::adaptive::Params;
 use crate::i18n;
 
 /// Bumped when a saved setting needs migrating.
 /// 2: `lang` used to be stored as "ru" by default; it is now "auto" (follow the system).
-const SCHEMA: u32 = 2;
+/// 3: the tray icon got its own source setting; providers switched off for it mean "selected".
+const SCHEMA: u32 = 3;
 
 fn legacy_schema() -> u32 {
     1
@@ -32,7 +33,7 @@ pub struct ProviderPref {
     pub enabled: bool,
     /// Own refresh interval for this provider; `None` follows the global one.
     pub interval_secs: Option<u64>,
-    /// Whether this provider's limits count toward the tray icon.
+    /// Whether this provider's limits count toward the tray icon when `tray_source` is "selected".
     pub show_in_tray: bool,
     /// Whether this provider may send threshold toasts.
     pub notify: bool,
@@ -55,6 +56,9 @@ impl Default for ProviderPref {
         }
     }
 }
+
+/// Limit kinds the tray icon can be restricted to, as stored in `Settings::tray_kinds`.
+pub const TRAY_KINDS: [&str; 4] = ["session", "daily", "weekly", "monthly"];
 
 /// More than this is a cluttered flyout and a lot of polling.
 pub const CUSTOM_MAX: usize = 8;
@@ -90,8 +94,15 @@ pub struct Settings {
     pub theme: String,
     /// "auto" (follow the system language) or one of `i18n::SUPPORTED`.
     pub lang: String,
-    /// "ring" | "bars"
+    /// "ring" | "bars" | "pie" | "number"
     pub tray_style: String,
+    /// Whose limits the tray icon shows: "all" enabled providers, the "selected" ones
+    /// (`ProviderPref::show_in_tray`), or only the "single" one in `tray_provider`.
+    pub tray_source: String,
+    /// The provider shown alone when `tray_source` is "single".
+    pub tray_provider: String,
+    /// Kinds of limit windows the tray icon looks at, from `TRAY_KINDS`; never empty.
+    pub tray_kinds: Vec<String>,
     /// Flyout density: "standard" | "compact"
     pub view_mode: String,
     /// Order of the list is the order of the cards.
@@ -119,6 +130,9 @@ impl Default for Settings {
             theme: "system".into(),
             lang: "auto".into(),
             tray_style: "ring".into(),
+            tray_source: "all".into(),
+            tray_provider: KNOWN_PROVIDERS[0].into(),
+            tray_kinds: TRAY_KINDS.iter().map(|k| (*k).into()).collect(),
             view_mode: "standard".into(),
             providers: KNOWN_PROVIDERS
                 .iter()
@@ -204,8 +218,29 @@ impl Settings {
         if self.lang != "auto" && !i18n::SUPPORTED.contains(&self.lang.as_str()) {
             self.lang = "auto".into();
         }
-        if !matches!(self.tray_style.as_str(), "ring" | "bars") {
+        if !matches!(self.tray_style.as_str(), "ring" | "bars" | "pie" | "number") {
             self.tray_style = "ring".into();
+        }
+        if !matches!(self.tray_source.as_str(), "all" | "selected" | "single") {
+            self.tray_source = "all".into();
+        }
+        if !self.providers.iter().any(|p| p.id == self.tray_provider) {
+            self.tray_provider = self
+                .providers
+                .first()
+                .map_or_else(|| KNOWN_PROVIDERS[0].into(), |p| p.id.clone());
+        }
+        let mut seen: Vec<String> = Vec::new();
+        self.tray_kinds.retain(|k| {
+            let keep = TRAY_KINDS.contains(&k.as_str()) && !seen.contains(k);
+            if keep {
+                seen.push(k.clone());
+            }
+            keep
+        });
+        // An icon that watches nothing would always look empty, so no choice means every kind.
+        if self.tray_kinds.is_empty() {
+            self.tray_kinds = TRAY_KINDS.iter().map(|k| (*k).into()).collect();
         }
         if !matches!(self.view_mode.as_str(), "standard" | "compact") {
             self.view_mode = "standard".into();
@@ -227,6 +262,10 @@ impl Settings {
         if self.schema < 2 {
             // Older versions saved the default language as an explicit choice, so it cannot be trusted.
             self.lang = "auto".into();
+        }
+        if self.schema < 3 && self.providers.iter().any(|p| !p.show_in_tray) {
+            // Until now switching a provider off for the tray was the only way to narrow it down.
+            self.tray_source = "selected".into();
         }
         self.schema = SCHEMA;
     }
@@ -279,8 +318,26 @@ impl Settings {
             .is_some_and(|p| p.hidden_windows.iter().any(|h| h == label))
     }
 
+    /// Whether the tray icon looks at this provider's limits.
     pub fn counts_in_tray(&self, id: &str) -> bool {
-        self.pref(id).is_none_or(|p| p.show_in_tray)
+        match self.tray_source.as_str() {
+            "single" => self.tray_provider == id,
+            "selected" => self.pref(id).is_none_or(|p| p.show_in_tray),
+            _ => true,
+        }
+    }
+
+    /// Whether the tray icon looks at limit windows of this kind.
+    pub fn counts_kind_in_tray(&self, kind: WindowKind) -> bool {
+        let key = match kind {
+            WindowKind::Session5h => "session",
+            WindowKind::Daily => "daily",
+            WindowKind::Weekly => "weekly",
+            WindowKind::Monthly => "monthly",
+            // A balance has no percentage, so there is nothing for the icon to draw.
+            WindowKind::Credits => return true,
+        };
+        self.tray_kinds.iter().any(|k| k == key)
     }
 
     pub fn notifies(&self, id: &str) -> bool {
@@ -459,6 +516,7 @@ mod tests {
         p.show_in_tray = false;
         p.notify = false;
         p.alias = Some("Work Claude".into());
+        s.tray_source = "selected".into();
         assert!(!s.window_visible("claude", "Week · Opus"));
         assert!(
             s.window_visible("claude", "Week"),
@@ -470,6 +528,100 @@ mod tests {
             s.window_visible("codex", "Week · Opus"),
             "other providers are unaffected"
         );
+    }
+
+    #[test]
+    fn tray_source_decides_which_providers_count() {
+        let mut s = Settings::default();
+        s.providers
+            .iter_mut()
+            .find(|p| p.id == "codex")
+            .unwrap()
+            .show_in_tray = false;
+        assert!(
+            s.counts_in_tray("codex"),
+            "\"all\" ignores the per-provider flag"
+        );
+
+        s.tray_source = "selected".into();
+        assert!(!s.counts_in_tray("codex") && s.counts_in_tray("claude"));
+
+        s.tray_source = "single".into();
+        s.tray_provider = "cursor".into();
+        assert!(s.counts_in_tray("cursor"));
+        assert!(!s.counts_in_tray("claude") && !s.counts_in_tray("codex"));
+    }
+
+    #[test]
+    fn tray_kinds_filter_window_kinds() {
+        let mut s = Settings::default();
+        assert!(s.counts_kind_in_tray(WindowKind::Session5h));
+        s.tray_kinds = vec!["weekly".into()];
+        assert!(s.counts_kind_in_tray(WindowKind::Weekly));
+        assert!(!s.counts_kind_in_tray(WindowKind::Session5h));
+        assert!(!s.counts_kind_in_tray(WindowKind::Monthly));
+    }
+
+    #[test]
+    fn normalize_repairs_tray_choices() {
+        let mut s = Settings::default();
+        s.tray_style = "hologram".into();
+        s.tray_source = "everything".into();
+        s.tray_provider = "bogus".into();
+        s.tray_kinds = vec!["weekly".into(), "weekly".into(), "yearly".into()];
+        s.normalize();
+        assert_eq!(s.tray_style, "ring");
+        assert_eq!(s.tray_source, "all");
+        assert_eq!(
+            s.tray_provider, "claude",
+            "falls back to the first provider"
+        );
+        assert_eq!(
+            s.tray_kinds,
+            vec!["weekly".to_string()],
+            "unknown kinds and duplicates are dropped"
+        );
+
+        s.tray_kinds = vec!["yearly".into()];
+        s.normalize();
+        assert_eq!(
+            s.tray_kinds.len(),
+            TRAY_KINDS.len(),
+            "empty means every kind"
+        );
+
+        s.tray_style = "pie".into();
+        s.tray_provider = "devin".into();
+        s.normalize();
+        assert_eq!(
+            (s.tray_style.as_str(), s.tray_provider.as_str()),
+            ("pie", "devin")
+        );
+    }
+
+    #[test]
+    fn providers_switched_off_for_the_tray_become_a_selection() {
+        let dir = std::env::temp_dir().join(format!("tokenza-tray-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("settings.json");
+
+        // A schema-2 file: the only way to narrow the tray was the per-provider switch.
+        std::fs::write(
+            &path,
+            r#"{"schema":2,"providers":[{"id":"claude","show_in_tray":false}]}"#,
+        )
+        .unwrap();
+        let s = Settings::load(&path);
+        assert_eq!(s.tray_source, "selected");
+        assert!(!s.counts_in_tray("claude") && s.counts_in_tray("codex"));
+
+        std::fs::write(&path, r#"{"schema":2,"providers":[{"id":"claude"}]}"#).unwrap();
+        assert_eq!(
+            Settings::load(&path).tray_source,
+            "all",
+            "nothing was switched off, nothing to migrate"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

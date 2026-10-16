@@ -55,7 +55,7 @@ export interface ProviderPref {
   enabled: boolean;
   /** Own interval for this provider; null follows the global one. */
   interval_secs: number | null;
-  /** Whether this provider's limits count toward the tray icon. */
+  /** Whether this provider's limits count toward the tray icon when the tray follows the chosen ones. */
   show_in_tray: boolean;
   /** Whether this provider may send threshold toasts. */
   notify: boolean;
@@ -87,6 +87,10 @@ export interface CustomDef {
   windows: CustomWindowDef[];
 }
 
+export type TrayStyle = "ring" | "bars" | "pie" | "number";
+export type TraySource = "all" | "selected" | "single";
+export type TrayKind = "session" | "daily" | "weekly" | "monthly";
+
 export interface Settings {
   update_mode: "smart" | "fixed";
   interval_secs: number;
@@ -103,7 +107,12 @@ export interface Settings {
   hotkey: string;
   theme: "system" | "light" | "dark";
   lang: LangSetting;
-  tray_style: "ring" | "bars";
+  tray_style: TrayStyle;
+  /** Whose limits the tray icon follows: every provider, the ones flagged `show_in_tray`, or just `tray_provider`. */
+  tray_source: TraySource;
+  tray_provider: string;
+  /** Kinds of limit windows the tray icon looks at; never empty. */
+  tray_kinds: TrayKind[];
   view_mode: "standard" | "compact";
   providers: ProviderPref[];
   custom_providers: CustomDef[];

@@ -9,7 +9,8 @@ use tauri::{
 };
 
 use crate::i18n;
-use crate::state::{AppState, FlyoutAnchor};
+use crate::settings::Settings;
+use crate::state::{AppState, FlyoutAnchor, ProviderState};
 use crate::tray_icon::{self, Levels};
 
 const TRAY_ID: &str = "main";
@@ -81,22 +82,25 @@ pub fn setup(app: &AppHandle) -> tauri::Result<()> {
     Ok(())
 }
 
-fn levels(app: &AppHandle) -> Levels {
-    let state = app.state::<AppState>();
-    let g = state.lock();
-    // Only providers that count toward the tray, and only their visible limit windows.
-    let settings = &g.settings;
+/// What the icon draws: the chosen providers' limit windows, minus hidden ones and unwanted kinds.
+fn tray_levels(settings: &Settings, providers: &[ProviderState]) -> Levels {
     Levels::from_windows(
-        g.providers
+        providers
             .iter()
             .filter(|p| p.enabled && settings.counts_in_tray(&p.id))
             .filter_map(|p| p.snapshot.as_ref().map(|s| (p.id.as_str(), s)))
             .flat_map(|(id, s)| {
-                s.windows
-                    .iter()
-                    .filter(move |w| settings.window_visible(id, &w.label))
+                s.windows.iter().filter(move |w| {
+                    settings.window_visible(id, &w.label) && settings.counts_kind_in_tray(w.kind)
+                })
             }),
     )
+}
+
+fn levels(app: &AppHandle) -> Levels {
+    let state = app.state::<AppState>();
+    let g = state.lock();
+    tray_levels(&g.settings, &g.providers)
 }
 
 fn render(app: &AppHandle) -> Image<'static> {
@@ -277,5 +281,111 @@ pub fn open_settings(app: &AppHandle) {
         let _ = w.show();
         let _ = w.unminimize();
         let _ = w.set_focus();
+    }
+}
+
+#[cfg(test)]
+#[allow(clippy::field_reassign_with_default)]
+mod tests {
+    use chrono::Utc;
+    use tokenza_core::{UsageSnapshot, UsageWindow, WindowKind};
+
+    use super::*;
+
+    fn provider(id: &str, windows: &[(WindowKind, &str, f32)]) -> ProviderState {
+        let mut st = ProviderState::new(id, true);
+        st.snapshot = Some(UsageSnapshot {
+            provider: id.into(),
+            account: String::new(),
+            windows: windows
+                .iter()
+                .map(|(kind, label, pct)| UsageWindow {
+                    kind: *kind,
+                    label: (*label).into(),
+                    used_pct: Some(*pct),
+                    resets_at: None,
+                    detail: None,
+                })
+                .collect(),
+            subscription_ends_at: None,
+            fetched_at: Utc::now(),
+        });
+        st
+    }
+
+    fn sample() -> Vec<ProviderState> {
+        vec![
+            provider(
+                "claude",
+                &[
+                    (WindowKind::Session5h, "5 h", 30.0),
+                    (WindowKind::Weekly, "Week", 50.0),
+                ],
+            ),
+            provider("codex", &[(WindowKind::Weekly, "Week", 80.0)]),
+        ]
+    }
+
+    #[test]
+    fn all_providers_report_the_worst_limit() {
+        let l = tray_levels(&Settings::default(), &sample());
+        assert_eq!(l.worst, Some(80.0));
+        assert_eq!(l.session, Some(30.0));
+        assert_eq!(l.weekly, Some(80.0));
+    }
+
+    #[test]
+    fn a_single_provider_ignores_the_others() {
+        let mut s = Settings::default();
+        s.tray_source = "single".into();
+        s.tray_provider = "claude".into();
+        let l = tray_levels(&s, &sample());
+        assert_eq!(
+            (l.worst, l.session, l.weekly),
+            (Some(50.0), Some(30.0), Some(50.0))
+        );
+    }
+
+    #[test]
+    fn selected_providers_follow_their_flag() {
+        let mut s = Settings::default();
+        s.tray_source = "selected".into();
+        s.providers
+            .iter_mut()
+            .find(|p| p.id == "codex")
+            .unwrap()
+            .show_in_tray = false;
+        assert_eq!(tray_levels(&s, &sample()).worst, Some(50.0));
+    }
+
+    #[test]
+    fn only_the_chosen_kinds_count() {
+        let mut s = Settings::default();
+        s.tray_kinds = vec!["session".into()];
+        let l = tray_levels(&s, &sample());
+        assert_eq!(
+            (l.worst, l.session, l.weekly),
+            (Some(30.0), Some(30.0), None)
+        );
+    }
+
+    #[test]
+    fn hidden_windows_and_disabled_providers_stay_out() {
+        let mut s = Settings::default();
+        s.providers
+            .iter_mut()
+            .find(|p| p.id == "codex")
+            .unwrap()
+            .hidden_windows = vec!["Week".into()];
+        assert_eq!(tray_levels(&s, &sample()).worst, Some(50.0));
+
+        let mut providers = sample();
+        providers[0].enabled = false;
+        assert_eq!(
+            tray_levels(&Settings::default(), &providers).worst,
+            Some(80.0)
+        );
+        providers[1].enabled = false;
+        assert_eq!(tray_levels(&Settings::default(), &providers).worst, None);
     }
 }

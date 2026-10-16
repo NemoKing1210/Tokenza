@@ -192,14 +192,6 @@ function ProviderRow(p: RowProps) {
 
             <div className="dline">
               <div className="dline-text">
-                <div className="dline-title">{t(lang, "provTray")}</div>
-                <div className="dline-hint">{t(lang, "provTrayHint")}</div>
-              </div>
-              <Switch checked={pref.show_in_tray} onChange={(_, d) => p.update({ show_in_tray: d.checked })} aria-label={t(lang, "provTray")} />
-            </div>
-
-            <div className="dline">
-              <div className="dline-text">
                 <div className="dline-title">{t(lang, "provNotify")}</div>
                 <div className="dline-hint">{t(lang, "provNotifyHint")}</div>
               </div>
@@ -254,7 +246,7 @@ function ProviderRow(p: RowProps) {
               {p.custom && <CustomActions def={p.custom} lang={lang} onEdit={p.onEdit} />}
               <button
                 className="btn btn-sm"
-                onClick={() => p.update({ interval_secs: null, show_in_tray: true, notify: true, hidden_windows: [], alias: null })}
+                onClick={() => p.update({ interval_secs: null, notify: true, hidden_windows: [], alias: null })}
               >
                 {t(lang, "provResetOne")}
               </button>

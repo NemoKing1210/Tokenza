@@ -29,6 +29,9 @@ export function demoState(): AppStateDto {
       theme: "system",
       lang: "auto",
       tray_style: "ring",
+      tray_source: "all",
+      tray_provider: "claude",
+      tray_kinds: ["session", "daily", "weekly", "monthly"],
       view_mode: "standard",
       custom_providers: [],
       providers: [
