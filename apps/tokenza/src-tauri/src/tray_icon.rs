@@ -294,7 +294,7 @@ pub fn render(style: &str, l: Levels) -> Vec<u8> {
 /// tiny-skia stores premultiplied alpha; tray icons expect straight alpha.
 fn unpremultiply(data: &[u8]) -> Vec<u8> {
     let mut out = Vec::with_capacity(data.len());
-    for px in data.chunks_exact(4) {
+    for px in data.as_chunks::<4>().0 {
         let a = px[3] as u32;
         if a == 0 {
             out.extend_from_slice(&[0, 0, 0, 0]);
@@ -314,7 +314,7 @@ mod tests {
     use super::*;
 
     fn alpha_sum(buf: &[u8]) -> u32 {
-        buf.chunks_exact(4).map(|p| p[3] as u32).sum()
+        buf.as_chunks::<4>().0.iter().map(|p| p[3] as u32).sum()
     }
 
     #[test]
