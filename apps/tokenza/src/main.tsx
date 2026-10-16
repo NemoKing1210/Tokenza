@@ -9,12 +9,12 @@ import { t } from "./i18n";
 const view = new URLSearchParams(location.search).get("view") ?? "flyout";
 document.documentElement.dataset.view = view;
 
-// The web view's browser menu (Back, Reload, Inspect…) has no place in a tray app. Text fields keep
-// theirs for copy and paste, and dev builds keep it for the inspector.
+// The web view's browser menu (Back, Reload, Inspect…) has no place in a tray app, in dev builds too
+// (the inspector stays on F12 there). Text fields keep their menu for copy and paste.
+document.addEventListener("contextmenu", (e) => {
+  if (!(e.target instanceof Element && e.target.closest("input, textarea, [contenteditable]"))) e.preventDefault();
+});
 if (import.meta.env.PROD) {
-  document.addEventListener("contextmenu", (e) => {
-    if (!(e.target instanceof Element && e.target.closest("input, textarea, [contenteditable]"))) e.preventDefault();
-  });
   // Tauri already leaves the web view's devtools off in release builds (the `devtools` feature is not
   // enabled); this also swallows the shortcuts so they do nothing at all.
   document.addEventListener(

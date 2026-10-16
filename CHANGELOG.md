@@ -28,4 +28,5 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - The last known limits survive a failed poll (rate limit, no connection) and an app restart: they are shown dimmed with "Last updated … ago" instead of an empty card. Windows whose cycle has already reset are dropped from the cache, and cached values never trigger notifications.
 - **Settings → About** shows the app version, author, repository, license and changelog, and links to GitHub issues. Links open in the default browser and only for the project's GitHub address.
 - **Settings → Tray icon** page: pick the icon's look (ring, bars, pie or the percentage as a number) with live previews, whose limits it follows (all providers, chosen ones, or a single one) and which periods count (5 h, day, week, month). The old per-provider "Count in tray icon" switch moved here; providers you had switched off for the tray are kept as a "chosen" selection.
+- The web view's browser context menu (Back, Reload, Inspect…) is blocked in dev builds as well; text fields keep theirs for copy and paste.
 - Open-source project files: license, contributing guide, code of conduct, security policy, CI.
