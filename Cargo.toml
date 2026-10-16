@@ -1,0 +1,16 @@
+[workspace]
+resolver = "2"
+members = ["crates/tokenza-core", "crates/tokenza-cli", "apps/tokenza/src-tauri"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+authors = ["Tokenza contributors"]
+
+[profile.release]
+lto = true
+codegen-units = 1
+opt-level = "s"
+strip = true
+panic = "abort"

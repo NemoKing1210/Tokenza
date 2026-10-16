@@ -1,0 +1,55 @@
+name: Bug report
+description: Something does not work as expected
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug. **Do not paste tokens, credential files or raw API responses.**
+        For security problems use the private reporting link on the issue chooser page instead.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you expect, and what happened instead?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open the flyout
+        2. ...
+    validations:
+      required: false
+  - type: dropdown
+    id: provider
+    attributes:
+      label: Affected provider
+      options:
+        - All / not provider-specific
+        - Claude Code
+        - Codex
+        - Cursor
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Tokenza version
+      placeholder: "0.1.0"
+    validations:
+      required: true
+  - type: input
+    id: windows
+    attributes:
+      label: Windows version
+      placeholder: "Windows 11 23H2"
+    validations:
+      required: true
+  - type: textarea
+    id: extra
+    attributes:
+      label: Additional context
+      description: Screenshots, the text shown on the provider card, console output from `tokenza` (with personal data removed).

@@ -1,0 +1,63 @@
+import { detectLang } from "./i18n";
+import type { AppStateDto, UsageSnapshot } from "./types";
+
+const inMs = (ms: number) => new Date(Date.now() + ms).toISOString();
+const ago = (ms: number) => new Date(Date.now() - ms).toISOString();
+const H = 3600_000;
+
+function snap(provider: string, account: string, windows: UsageSnapshot["windows"], agoMs: number): UsageSnapshot {
+  return { provider, account, windows, fetched_at: ago(agoMs) };
+}
+
+/** Browser-only sample data that mirrors the Figma mockups. */
+export function demoState(): AppStateDto {
+  return {
+    resolved_lang: detectLang(typeof navigator === "undefined" ? [] : navigator.languages),
+    settings: {
+      update_mode: "smart",
+      interval_secs: 180,
+      min_interval_secs: 60,
+      max_interval_secs: 1800,
+      boost_near_limit: true,
+      slow_when_idle: true,
+      warn_pct: 80,
+      crit_pct: 95,
+      notify_reset: true,
+      autostart: false,
+      theme: "system",
+      lang: "auto",
+      tray_style: "ring",
+      view_mode: "standard",
+      providers: [
+        { id: "claude", enabled: true, interval_secs: null, show_in_tray: true, notify: true, hidden_windows: [], alias: null },
+        { id: "codex", enabled: true, interval_secs: null, show_in_tray: true, notify: true, hidden_windows: [], alias: null },
+        { id: "cursor", enabled: true, interval_secs: null, show_in_tray: true, notify: true, hidden_windows: [], alias: null },
+      ],
+    },
+    providers: [
+      {
+        id: "claude", enabled: true, status: "ok", error: null, last_attempt: ago(30_000),
+        poll: { interval_secs: 360, base_secs: 180, min_secs: 180, floor_secs: 216, state: "rate_limited", rate_limit_hits: 2, next_refresh_at: inMs(150_000) },
+        snapshot: snap("claude", "max", [
+          { kind: "Session5h", label: "5 h", used_pct: 33, resets_at: inMs(3 * H + 2 * 60_000) },
+          { kind: "Weekly", label: "Week", used_pct: 55, resets_at: inMs(46 * H) },
+        ], 30_000),
+      },
+      {
+        id: "codex", enabled: true, status: "ok", error: null, last_attempt: ago(30_000),
+        poll: { interval_secs: 90, base_secs: 180, min_secs: 180, floor_secs: null, state: "boosted", rate_limit_hits: 0, next_refresh_at: inMs(60_000) },
+        snapshot: snap("codex", "plus", [
+          { kind: "Session5h", label: "5 h", used_pct: 78, resets_at: inMs(H + 12 * 60_000) },
+          { kind: "Weekly", label: "Week", used_pct: 13, resets_at: inMs(21 * 24 * H) },
+        ], 30_000),
+      },
+      {
+        id: "cursor", enabled: true, status: "ok", error: null, last_attempt: ago(120_000),
+        poll: { interval_secs: 300, base_secs: 300, min_secs: 300, floor_secs: null, state: "steady", rate_limit_hits: 0, next_refresh_at: inMs(180_000) },
+        snapshot: snap("cursor", "pro", [
+          { kind: "Monthly", label: "Included usage", used_pct: 96, resets_at: inMs(24 * 24 * H) },
+        ], 120_000),
+      },
+    ],
+  };
+}

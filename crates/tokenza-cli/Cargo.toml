@@ -1,0 +1,16 @@
+[package]
+name = "tokenza-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "Prints AI agent usage limits as JSON"
+
+[[bin]]
+name = "tokenza"
+path = "src/main.rs"
+
+[dependencies]
+tokenza-core = { path = "../tokenza-core" }
+serde_json = "1"
+tokio = { version = "1", features = ["rt-multi-thread", "macros"] }

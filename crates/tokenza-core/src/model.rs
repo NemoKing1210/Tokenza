@@ -1,0 +1,38 @@
+use chrono::{DateTime, Utc};
+use serde::Serialize;
+
+/// A detected login of an agent. Never holds a token.
+#[derive(Debug, Clone)]
+pub struct Account {
+    pub label: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct UsageSnapshot {
+    pub provider: String,
+    /// Email or plan, never a token.
+    pub account: String,
+    pub windows: Vec<UsageWindow>,
+    pub fetched_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+pub enum WindowKind {
+    Session5h,
+    Weekly,
+    Monthly,
+    Credits,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct UsageWindow {
+    pub kind: WindowKind,
+    /// Human label, e.g. "Week · Opus".
+    pub label: String,
+    /// `None` for windows that have no percentage (credit balance).
+    pub used_pct: Option<f32>,
+    pub resets_at: Option<DateTime<Utc>>,
+    /// Extra text such as a credit balance.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub detail: Option<String>,
+}
