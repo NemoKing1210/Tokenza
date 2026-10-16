@@ -44,6 +44,8 @@ export interface ProviderState {
   error: ErrorInfo | null;
   last_attempt: string | null;
   poll: PollInfo | null;
+  /** Credential fields that have a stored value; the values never reach the UI. */
+  secrets: string[];
 }
 
 export interface ProviderPref {
@@ -59,6 +61,28 @@ export interface ProviderPref {
   hidden_windows: string[];
   /** Own display name; null uses the built-in one. */
   alias: string | null;
+}
+
+export type AuthScheme = "bearer" | "header" | "cookie";
+
+/** One limit window of a user-defined provider: where to find its numbers in the JSON response. */
+export interface CustomWindowDef {
+  label: string;
+  kind: Exclude<WindowKind, "Credits">;
+  used_path: string;
+  limit_path: string | null;
+  remaining: boolean;
+  resets_at_path: string | null;
+}
+
+/** A provider the user defined. Its token is kept in the OS credential store, not here. */
+export interface CustomDef {
+  /** Empty for a provider that does not exist yet; the backend assigns it. */
+  id: string;
+  name: string;
+  url: string;
+  auth: { scheme: AuthScheme; name: string };
+  windows: CustomWindowDef[];
 }
 
 export interface Settings {
@@ -77,6 +101,7 @@ export interface Settings {
   tray_style: "ring" | "bars";
   view_mode: "standard" | "compact";
   providers: ProviderPref[];
+  custom_providers: CustomDef[];
 }
 
 export interface AppStateDto {

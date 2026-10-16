@@ -5,7 +5,7 @@
 
 A lightweight Windows tray app that shows how much of your AI coding agents' usage limits you have left, and when they reset.
 
-Tokenza watches **Claude Code**, **Codex** and **Cursor**. Click the tray icon to see every limit window at a glance, and get a notification before you run out.
+Tokenza watches **Claude Code**, **Codex**, **Cursor**, **OpenCode** (Go plan) and **Command Code**. Click the tray icon to see every limit window at a glance, and get a notification before you run out.
 
 > **Status:** early development (v0.1). Windows 10/11 only. Expect rough edges.
 
@@ -34,6 +34,18 @@ Tokenza is built to be easy to audit:
 | Claude Code | `api.anthropic.com`| `~/.claude/.credentials.json`                          |
 | Codex       | `chatgpt.com`      | `~/.codex/auth.json`                                   |
 | Cursor      | `cursor.com`       | Cursor's local `state.vscdb` (opened read-only)        |
+| OpenCode Go | `opencode.ai`      | `OPENCODE_GO_WORKSPACE_ID` and `OPENCODE_GO_AUTH_COOKIE` environment variables (see below) |
+| Command Code| `api.commandcode.ai`| `~/.commandcode/auth.json` (or `COMMAND_CODE_API_KEY`) |
+
+**OpenCode Go setup.** The OpenCode console has no API-key access to usage, and the `opencode` CLI does not store a console login, so Tokenza never touches your browser's cookies. Instead, open the OpenCode card in **Settings → Providers** and enter the workspace ID (the `wrk_…` part of `opencode.ai/workspace/wrk_…/go`) and the value of the `__Host-console_session` cookie, copied from your browser's developer tools. The `OPENCODE_GO_WORKSPACE_ID` and `OPENCODE_GO_AUTH_COOKIE` environment variables work too. The cookie expires eventually; replace it when the card asks you to sign in again.
+
+### Keys you enter yourself
+
+Some providers need a key that no agent stores locally, and you can also add services Tokenza does not know (**Settings → Providers → Add provider**: a name, an HTTPS URL, how to authenticate, and the JSON paths of the numbers to show).
+
+- What you type is kept in the **Windows Credential Manager** under the name "Tokenza", never in `settings.json`, and is never shown again (you can replace or remove it).
+- Tokenza reads it into memory only while building a request, like the logins it reads from the agents.
+- A custom provider only ever talks to the single HTTPS URL you entered, sends the token only there, and does not follow redirects. Custom providers add no domain to the list above; the one you configure is the only one contacted.
 
 Settings (thresholds, order, language, …) are stored in your user config directory as `settings.json` and contain no credentials.
 
@@ -71,7 +83,7 @@ The core library also ships a small CLI that prints the limits of every detected
 
 ```bash
 cargo run -p tokenza-cli              # all providers
-cargo run -p tokenza-cli -- claude    # one provider: claude | codex | cursor
+cargo run -p tokenza-cli -- claude    # one provider: claude | codex | cursor | opencode | commandcode
 ```
 
 ## Project layout
@@ -112,8 +124,8 @@ Contributions are welcome: bug reports, new providers, translations and fixes. P
 
 ## Trademarks and acknowledgements
 
-Tokenza is an independent project and is **not affiliated with, endorsed by, or sponsored by** Anthropic, OpenAI, Anysphere (Cursor) or Microsoft. Claude, Claude Code, Codex, ChatGPT, OpenAI, Cursor and Windows are trademarks of their respective owners; they are used here only to identify the services Tokenza reads data from.
+Tokenza is an independent project and is **not affiliated with, endorsed by, or sponsored by** Anthropic, OpenAI, Anysphere (Cursor), Anomaly (OpenCode), Command Code or Microsoft. Claude, Claude Code, Codex, ChatGPT, OpenAI, Cursor, OpenCode, Command Code and Windows are trademarks of their respective owners; they are used here only to identify the services Tokenza reads data from.
 
-Provider logos come from [Simple Icons](https://simpleicons.org/) (CC0 icon data); the marks themselves remain the property of their owners.
+Provider logos come from [Simple Icons](https://simpleicons.org/) (CC0 icon data), except the Command Code mark, which is the monochrome icon published on its website; the marks themselves remain the property of their owners.
 
 Built with [Tauri](https://tauri.app/), [React](https://react.dev/), [Fluent UI](https://react.fluentui.dev/) and [tiny-skia](https://github.com/RazrFalcon/tiny-skia).

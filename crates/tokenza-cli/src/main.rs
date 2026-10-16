@@ -1,5 +1,5 @@
 //! Prototype CLI: prints limits of every detected agent as JSON.
-//! Usage: `tokenza [claude|codex|cursor]`
+//! Usage: `tokenza [claude|codex|cursor|opencode|commandcode]`
 
 use serde_json::{json, Value};
 use tokenza_core::all_providers;

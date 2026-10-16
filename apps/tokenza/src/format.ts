@@ -1,5 +1,5 @@
 import { t, type Lang } from "./i18n";
-import type { UsageWindow } from "./types";
+import type { CustomDef, UsageWindow } from "./types";
 
 export type { Lang };
 export type Tone = "accent" | "warning" | "critical";
@@ -32,13 +32,6 @@ export function formatReset(resetsAt: string | null, now: number, lang: Lang, cy
   return t(lang, cycle ? "cycleResetsIn" : "resetsIn", { x: formatDuration(ms, lang) });
 }
 
-export function formatAgo(iso: string | null, now: number, lang: Lang): string {
-  if (!iso) return "";
-  const ms = Math.max(0, now - new Date(iso).getTime());
-  if (ms < 5000) return t(lang, "updatedJustNow");
-  return t(lang, "updatedAgo", { x: formatDuration(ms, lang) });
-}
-
 export function windowLabel(w: UsageWindow, lang: Lang, short = false): string {
   const suffix = w.label.includes(" · ") ? ` · ${w.label.split(" · ").slice(1).join(" · ")}` : "";
   switch (w.kind) {
@@ -57,7 +50,13 @@ export const PROVIDER_NAMES: Record<string, string> = {
   claude: "Claude Code",
   codex: "Codex",
   cursor: "Cursor",
+  opencode: "OpenCode",
+  commandcode: "Command Code",
 };
+
+/** Built-in name, or the name of a user-defined provider. */
+export const providerName = (id: string, custom: CustomDef[] = []): string =>
+  PROVIDER_NAMES[id] ?? custom.find((d) => d.id === id)?.name ?? id;
 
 export function planLabel(account: string): string {
   if (!account) return "";

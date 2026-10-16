@@ -21,7 +21,7 @@ fn oauth() -> Option<Value> {
 
 #[async_trait]
 impl Provider for Claude {
-    fn id(&self) -> &'static str {
+    fn id(&self) -> &str {
         "claude"
     }
 

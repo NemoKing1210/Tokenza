@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
+use tokenza_core::CustomDef;
 
 use crate::adaptive::Params;
 use crate::i18n;
@@ -14,7 +15,7 @@ fn legacy_schema() -> u32 {
 }
 
 /// Provider ids in default card order.
-pub const KNOWN_PROVIDERS: [&str; 3] = ["claude", "codex", "cursor"];
+pub const KNOWN_PROVIDERS: [&str; 5] = ["claude", "codex", "cursor", "opencode", "commandcode"];
 
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(default)]
@@ -47,6 +48,8 @@ impl Default for ProviderPref {
     }
 }
 
+/// More than this is a cluttered flyout and a lot of polling.
+pub const CUSTOM_MAX: usize = 8;
 const ALIAS_MAX_CHARS: usize = 24;
 const HIDDEN_WINDOWS_MAX: usize = 16;
 
@@ -81,6 +84,8 @@ pub struct Settings {
     pub view_mode: String,
     /// Order of the list is the order of the cards.
     pub providers: Vec<ProviderPref>,
+    /// Providers the user defined; their keys are in the credential store, not here.
+    pub custom_providers: Vec<CustomDef>,
 }
 
 impl Default for Settings {
@@ -109,6 +114,7 @@ impl Default for Settings {
                     ..Default::default()
                 })
                 .collect(),
+            custom_providers: Vec::new(),
         }
     }
 }
@@ -116,22 +122,41 @@ impl Default for Settings {
 impl Settings {
     /// Makes sure every known provider has an entry and no unknown or duplicate ones stay.
     pub fn normalize(&mut self) {
+        // A hand-edited or damaged definition is dropped rather than polled with a broken request.
+        let mut ids: Vec<String> = Vec::new();
+        self.custom_providers.retain_mut(|d| {
+            d.normalize();
+            let keep = d.validate().is_ok()
+                && ids.len() < CUSTOM_MAX
+                && !KNOWN_PROVIDERS.contains(&d.id.as_str())
+                && !ids.contains(&d.id);
+            if keep {
+                ids.push(d.id.clone());
+            }
+            keep
+        });
+        let known = |id: &str| KNOWN_PROVIDERS.contains(&id) || ids.iter().any(|i| i == id);
+
         let mut seen = Vec::new();
         self.providers.retain(|p| {
-            let keep = KNOWN_PROVIDERS.contains(&p.id.as_str()) && !seen.contains(&p.id);
+            let keep = known(&p.id) && !seen.contains(&p.id);
             if keep {
                 seen.push(p.id.clone());
             }
             keep
         });
-        for id in KNOWN_PROVIDERS {
-            if !seen.iter().any(|s| s == id) {
-                self.providers.push(ProviderPref {
-                    id: id.into(),
-                    enabled: true,
-                    ..Default::default()
-                });
-            }
+        let missing: Vec<String> = KNOWN_PROVIDERS
+            .iter()
+            .map(|id| id.to_string())
+            .chain(ids.iter().cloned())
+            .filter(|id| !seen.contains(id))
+            .collect();
+        for id in missing {
+            self.providers.push(ProviderPref {
+                id,
+                enabled: true,
+                ..Default::default()
+            });
         }
         self.interval_secs = self.interval_secs.clamp(60, 3600);
         self.min_interval_secs = self.min_interval_secs.clamp(30, 3600);
@@ -256,7 +281,13 @@ impl Settings {
             "claude" => "Claude Code",
             "codex" => "Codex",
             "cursor" => "Cursor",
-            other => other,
+            "opencode" => "OpenCode",
+            "commandcode" => "Command Code",
+            other => self
+                .custom_providers
+                .iter()
+                .find(|d| d.id == other)
+                .map_or(other, |d| d.name.as_str()),
         }
         .to_string()
     }
@@ -311,10 +342,56 @@ mod tests {
             "duplicate hidden windows collapse"
         );
         let ids: Vec<_> = s.providers.iter().map(|p| p.id.as_str()).collect();
-        assert_eq!(ids, ["cursor", "claude", "codex"]);
+        assert_eq!(
+            ids,
+            ["cursor", "claude", "codex", "opencode", "commandcode"]
+        );
         assert!(!s.is_enabled("cursor"));
         assert_eq!(s.interval_secs, 60);
         assert!(s.crit_pct >= s.warn_pct);
+    }
+
+    #[test]
+    fn custom_providers_are_validated_and_get_a_card() {
+        use tokenza_core::{CustomDef, CustomWindow};
+        let good = CustomDef {
+            id: "custom-acme".into(),
+            name: "Acme".into(),
+            url: "https://api.acme.example/usage".into(),
+            windows: vec![CustomWindow {
+                label: "Month".into(),
+                used_path: "used".into(),
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+        let insecure = CustomDef {
+            id: "custom-bad".into(),
+            url: "http://api.acme.example/usage".into(),
+            ..good.clone()
+        };
+        let clash = CustomDef {
+            id: "claude".into(),
+            ..good.clone()
+        };
+        let mut s = Settings::default();
+        s.custom_providers = vec![good.clone(), good, insecure, clash];
+        s.normalize();
+        assert_eq!(
+            s.custom_providers.len(),
+            1,
+            "invalid and duplicate definitions are dropped"
+        );
+        let ids: Vec<_> = s.providers.iter().map(|p| p.id.as_str()).collect();
+        assert_eq!(ids.last(), Some(&"custom-acme"));
+        assert_eq!(s.display_name("custom-acme"), "Acme");
+
+        s.custom_providers.clear();
+        s.normalize();
+        assert!(
+            !s.providers.iter().any(|p| p.id == "custom-acme"),
+            "a removed provider loses its card"
+        );
     }
 
     #[test]

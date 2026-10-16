@@ -1,15 +1,15 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::{Duration, Instant};
 
 use chrono::{DateTime, Utc};
 use serde::Serialize;
-use tokenza_core::{ProviderError, UsageSnapshot};
+use tokenza_core::{CustomDef, ProviderError, UsageSnapshot};
 use tokio::sync::Notify;
 
 use crate::adaptive::{Learned, TuneState, Tuner};
-use crate::settings::Settings;
+use crate::settings::{Settings, CUSTOM_MAX};
 
 #[derive(Clone, Serialize)]
 pub struct ErrorInfo {
@@ -38,6 +38,8 @@ pub struct ProviderState {
     pub last_attempt: Option<DateTime<Utc>>,
     /// Polling interval details; filled in when the state is handed to the UI.
     pub poll: Option<PollInfo>,
+    /// Credential fields that have a stored value (never the values themselves).
+    pub secrets: Vec<String>,
     #[serde(skip)]
     pub tuner: Tuner,
     /// The provider's own minimum interval, learned on its first poll.
@@ -59,6 +61,7 @@ impl ProviderState {
             error: None,
             last_attempt: None,
             poll: None,
+            secrets: Vec::new(),
             tuner: Tuner::default(),
             min_secs: 60,
             fails: 0,
@@ -96,6 +99,8 @@ pub struct Inner {
     pub last_hidden: Option<Instant>,
     /// Last tuning file content, to write only on change.
     pub tuning_saved: String,
+    /// `provider/field` of every stored credential, so the UI state needs no credential-store reads.
+    pub secrets: HashSet<String>,
 }
 
 pub struct AppState {
@@ -144,6 +149,7 @@ impl AppState {
                 flyout_anchor: None,
                 last_hidden: None,
                 tuning_saved: String::new(),
+                secrets: HashSet::new(),
             }),
             settings_path,
             wake: Arc::new(Notify::new()),
@@ -163,6 +169,11 @@ impl AppState {
             .iter()
             .map(|st| {
                 let mut st = st.clone();
+                st.secrets = secret_fields(&st.id)
+                    .into_iter()
+                    .filter(|f| g.secrets.contains(&format!("{}/{f}", st.id)))
+                    .map(String::from)
+                    .collect();
                 let p = g.settings.params(&st.id, Duration::from_secs(st.min_secs));
                 st.poll = Some(PollInfo {
                     interval_secs: st.tuner.current(&p).as_secs(),
@@ -212,10 +223,92 @@ impl AppState {
         }
     }
 
-    /// Applies new settings: keeps provider order and per-provider state in sync.
+    /// Settings from the UI. Custom provider definitions only change through `save_custom` and
+    /// `remove_custom`, so a stale copy of the settings cannot bring back a removed provider.
     pub fn apply_settings(&self, mut s: Settings) -> Settings {
-        s.normalize();
         let mut g = self.lock();
+        s.custom_providers = g.settings.custom_providers.clone();
+        self.apply_locked(&mut g, s)
+    }
+
+    /// Adds a custom provider (empty `id`) or replaces an existing one.
+    pub fn save_custom(&self, mut def: CustomDef) -> Result<(CustomDef, Settings), String> {
+        let mut g = self.lock();
+        let mut s = g.settings.clone();
+        if def.id.is_empty() {
+            if s.custom_providers.len() >= CUSTOM_MAX {
+                return Err(format!("at most {CUSTOM_MAX} custom providers"));
+            }
+            def.id = unique_id(&def.name, &s.custom_providers);
+        } else if !s.custom_providers.iter().any(|d| d.id == def.id) {
+            return Err("unknown provider".into());
+        }
+        def.normalize();
+        def.validate()?;
+        match s.custom_providers.iter_mut().find(|d| d.id == def.id) {
+            Some(slot) => *slot = def.clone(),
+            None => s.custom_providers.push(def.clone()),
+        }
+        let applied = self.apply_locked(&mut g, s);
+        Ok((def, applied))
+    }
+
+    pub fn remove_custom(&self, id: &str) -> Result<Settings, String> {
+        let mut g = self.lock();
+        let mut s = g.settings.clone();
+        let before = s.custom_providers.len();
+        s.custom_providers.retain(|d| d.id != id);
+        if s.custom_providers.len() == before {
+            return Err("unknown provider".into());
+        }
+        let applied = self.apply_locked(&mut g, s);
+        g.secrets.retain(|k| !k.starts_with(&format!("{id}/")));
+        Ok(applied)
+    }
+
+    pub fn mark_secret(&self, provider: &str, field: &str, present: bool) {
+        let key = format!("{provider}/{field}");
+        let mut g = self.lock();
+        if present {
+            g.secrets.insert(key);
+        } else {
+            g.secrets.remove(&key);
+        }
+    }
+
+    /// Credential fields the provider accepts; empty for unknown ids.
+    pub fn accepted_fields(&self, id: &str) -> Vec<&'static str> {
+        let g = self.lock();
+        if g.settings.custom_providers.iter().any(|d| d.id == id) || !secret_fields(id).is_empty() {
+            secret_fields(id)
+        } else {
+            Vec::new()
+        }
+    }
+
+    /// Fills the stored-credential cache from the credential store; called once at startup.
+    pub fn load_secret_cache(&self) {
+        let ids: Vec<String> = self.lock().providers.iter().map(|p| p.id.clone()).collect();
+        let present: HashSet<String> = ids
+            .iter()
+            .flat_map(|id| secret_fields(id).into_iter().map(move |f| (id.clone(), f)))
+            .filter(|(id, f)| crate::secrets::exists(id, f))
+            .map(|(id, f)| format!("{id}/{f}"))
+            .collect();
+        self.lock().secrets = present;
+    }
+
+    /// Makes the scheduler poll this provider at its next tick, e.g. after its key changed.
+    pub fn poll_soon(&self, id: &str) {
+        if let Some(st) = self.lock().providers.iter_mut().find(|s| s.id == id) {
+            st.fails = 0;
+            st.next_due = None;
+        }
+        self.wake.notify_one();
+    }
+
+    fn apply_locked(&self, g: &mut MutexGuard<'_, Inner>, mut s: Settings) -> Settings {
+        s.normalize();
         let mut old: Vec<ProviderState> = std::mem::take(&mut g.providers);
         g.providers = s
             .providers
@@ -244,5 +337,71 @@ impl AppState {
             st.next_due = st.next_due.map(|d| d.min(latest));
         }
         s
+    }
+}
+
+/// Credential fields a provider id takes: fixed for built-ins, one token for custom ones.
+pub fn secret_fields(id: &str) -> Vec<&'static str> {
+    if id.starts_with(tokenza_core::providers::custom::ID_PREFIX) {
+        vec![tokenza_core::secrets::CUSTOM_FIELD]
+    } else {
+        tokenza_core::secrets::builtin_fields(id).to_vec()
+    }
+}
+
+/// `custom-<slug of the name>`, with a number appended when the slug is taken.
+fn unique_id(name: &str, taken: &[CustomDef]) -> String {
+    let mut slug = String::new();
+    for c in name.to_lowercase().chars() {
+        if c.is_ascii_alphanumeric() {
+            slug.push(c);
+        } else if !slug.ends_with('-') {
+            slug.push('-');
+        }
+    }
+    let slug: String = slug.trim_matches('-').chars().take(16).collect();
+    let slug = slug.trim_end_matches('-');
+    let base = format!(
+        "{}{}",
+        tokenza_core::providers::custom::ID_PREFIX,
+        if slug.is_empty() { "provider" } else { slug }
+    );
+    let mut id = base.clone();
+    let mut n = 2;
+    while taken.iter().any(|d| d.id == id) {
+        id = format!("{base}-{n}");
+        n += 1;
+    }
+    id
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn taken(ids: &[&str]) -> Vec<CustomDef> {
+        ids.iter()
+            .map(|id| CustomDef {
+                id: (*id).into(),
+                ..Default::default()
+            })
+            .collect()
+    }
+
+    #[test]
+    fn ids_are_slugged_and_unique() {
+        assert_eq!(unique_id("My  Service!", &[]), "custom-my-service");
+        assert_eq!(unique_id("Яндекс", &[]), "custom-provider");
+        assert_eq!(
+            unique_id("Acme", &taken(&["custom-acme", "custom-acme-2"])),
+            "custom-acme-3"
+        );
+    }
+
+    #[test]
+    fn secret_fields_follow_the_provider_kind() {
+        assert_eq!(secret_fields("commandcode"), ["api_key"]);
+        assert_eq!(secret_fields("custom-acme"), ["token"]);
+        assert!(secret_fields("claude").is_empty());
     }
 }

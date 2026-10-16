@@ -1,6 +1,9 @@
 pub mod claude;
 pub mod codex;
+pub mod commandcode;
 pub mod cursor;
+pub mod custom;
+pub mod opencode;
 
 use std::path::PathBuf;
 
@@ -20,6 +23,36 @@ pub(crate) fn http() -> Result<reqwest::Client, ProviderError> {
         .timeout(std::time::Duration::from_secs(15))
         .user_agent("tokenza/0.1")
         .build()?)
+}
+
+/// Same client, but a redirect is an error: user-defined endpoints must not forward our credentials elsewhere.
+pub(crate) fn http_no_redirect() -> Result<reqwest::Client, ProviderError> {
+    Ok(reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(15))
+        .user_agent("tokenza/0.1")
+        .redirect(reqwest::redirect::Policy::none())
+        .build()?)
+}
+
+/// A JSON number, or a string holding one.
+pub(crate) fn number(v: &Value) -> Option<f64> {
+    v.as_f64().or_else(|| v.as_str()?.trim().parse().ok())
+}
+
+/// A timestamp as RFC 3339 text or as epoch seconds / milliseconds (told apart by magnitude).
+pub(crate) fn timestamp(v: &Value) -> Option<DateTime<Utc>> {
+    if let Some(d) = v
+        .as_str()
+        .and_then(|s| DateTime::parse_from_rfc3339(s).ok())
+    {
+        return Some(d.with_timezone(&Utc));
+    }
+    let n = number(v)? as i64;
+    if n >= 1_000_000_000_000 {
+        DateTime::from_timestamp_millis(n)
+    } else {
+        DateTime::from_timestamp(n, 0)
+    }
 }
 
 /// Reads and parses a JSON file; any failure means "no usable login".

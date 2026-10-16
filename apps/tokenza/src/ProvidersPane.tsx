@@ -2,21 +2,31 @@ import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, ty
 import { Switch } from "@fluentui/react-components";
 import { selectLang, useStore } from "./store";
 import { t, type Lang } from "./i18n";
-import { PROVIDER_NAMES, formatAgo, planLabel, toneFor, windowLabel } from "./format";
+import { planLabel, providerName, toneFor, windowLabel } from "./format";
+import { ConnectSection, CustomActions, CustomForm } from "./Connect";
 import { ProviderLogo } from "./Logo";
 import { ChevronDown, GripIcon } from "./icons";
 import { BASE_OPTIONS, SecondsSelect } from "./UpdatePane";
-import type { ProviderPref, ProviderState, Settings, UsageWindow } from "./types";
+import type { CustomDef, ProviderPref, ProviderState, Settings, UsageWindow } from "./types";
 
 /** Where each provider's numbers come from: shown for transparency, deliberately not translated. */
 const SOURCES: Record<string, string> = {
   claude: "%USERPROFILE%\\.claude\\.credentials.json  →  api.anthropic.com",
   codex: "%USERPROFILE%\\.codex\\auth.json  →  chatgpt.com",
   cursor: "%APPDATA%\\Cursor\\…\\state.vscdb  →  cursor.com",
+  opencode: "OPENCODE_GO_WORKSPACE_ID + OPENCODE_GO_AUTH_COOKIE  →  opencode.ai",
+  commandcode: "%USERPROFILE%\\.commandcode\\auth.json  →  api.commandcode.ai",
 };
 
-const DEFAULT_ORDER = ["claude", "codex", "cursor"];
-const defaultName = (id: string) => PROVIDER_NAMES[id] ?? id;
+const DEFAULT_ORDER = ["claude", "codex", "cursor", "opencode", "commandcode"];
+
+const hostOf = (url: string) => {
+  try {
+    return new URL(url).host;
+  } catch {
+    return url;
+  }
+};
 
 type Tone = "ok" | "warn" | "bad" | "idle";
 
@@ -59,7 +69,7 @@ function MiniPills({ windows, lang }: { windows: UsageWindow[]; lang: Lang }) {
   );
 }
 
-function NameField({ id, pref, lang, onChange }: { id: string; pref: ProviderPref; lang: Lang; onChange: (alias: string | null) => void }) {
+function NameField({ fallback, pref, lang, onChange }: { fallback: string; pref: ProviderPref; lang: Lang; onChange: (alias: string | null) => void }) {
   const [draft, setDraft] = useState(pref.alias ?? "");
   // Follows outside changes (reset, other window) without fighting the user's typing.
   useEffect(() => setDraft(pref.alias ?? ""), [pref.alias]);
@@ -70,7 +80,7 @@ function NameField({ id, pref, lang, onChange }: { id: string; pref: ProviderPre
         className="field"
         value={draft}
         maxLength={24}
-        placeholder={defaultName(id)}
+        placeholder={fallback}
         aria-label={t(lang, "provName")}
         onChange={(e) => setDraft(e.target.value)}
         onBlur={commit}
@@ -92,8 +102,9 @@ interface RowProps {
   pref: ProviderPref;
   st: ProviderState | undefined;
   s: Settings;
+  custom: CustomDef | undefined;
+  onEdit: () => void;
   lang: Lang;
-  now: number;
   open: boolean;
   onToggleOpen: () => void;
   update: (patch: Partial<ProviderPref>) => void;
@@ -109,12 +120,12 @@ interface RowProps {
 
 function ProviderRow(p: RowProps) {
   const { pref, st, lang } = p;
-  const name = pref.alias?.trim() || defaultName(pref.id);
+  const defaultName = providerName(pref.id, p.s.custom_providers);
+  const name = pref.alias?.trim() || defaultName;
   const status = statusOf(st, pref.enabled, lang);
   const account = st?.snapshot?.account === "claude.ai" ? "" : (st?.snapshot?.account ?? "");
   const plan = planLabel(account);
   const windows = st?.snapshot?.windows ?? [];
-  const updated = pref.enabled && st?.status === "ok" ? formatAgo(st.snapshot?.fetched_at ?? st.last_attempt, p.now, lang) : "";
 
   const cls = ["prow", p.open && "is-open", !pref.enabled && "is-off", `is-${p.motion.state}`].filter(Boolean).join(" ");
   const style = { transform: p.motion.transform, viewTransitionName: `prov-${pref.id}` } as CSSProperties;
@@ -143,7 +154,6 @@ function ProviderRow(p: RowProps) {
           <div className="prow-sub">
             <i className={`dot dot-${status.tone}`} />
             <span>{status.text}</span>
-            {updated && <span className="muted">· {updated}</span>}
           </div>
         </div>
         {pref.enabled && <MiniPills windows={windows.filter((w) => !pref.hidden_windows.includes(w.label))} lang={lang} />}
@@ -163,12 +173,14 @@ function ProviderRow(p: RowProps) {
       <div className="pdetail" inert={!p.open}>
         <div className="pdetail-inner">
           <div className="pdetail-body">
+            <ConnectSection id={pref.id} secrets={st?.secrets ?? []} lang={lang} />
+
             <div className="dline">
               <div className="dline-text">
                 <div className="dline-title">{t(lang, "provName")}</div>
                 <div className="dline-hint">{t(lang, "provNameHint")}</div>
               </div>
-              <NameField id={pref.id} pref={pref} lang={lang} onChange={(alias) => p.update({ alias })} />
+              <NameField fallback={defaultName} pref={pref} lang={lang} onChange={(alias) => p.update({ alias })} />
             </div>
 
             <div className="dline">
@@ -230,8 +242,9 @@ function ProviderRow(p: RowProps) {
             <div className="dfoot">
               <div className="dsource">
                 <span className="dsource-label">{t(lang, "provSource")}</span>
-                <code>{SOURCES[pref.id] ?? "—"}</code>
+                <code>{p.custom ? `Credential Manager  →  ${hostOf(p.custom.url)}` : (SOURCES[pref.id] ?? "—")}</code>
               </div>
+              {p.custom && <CustomActions def={p.custom} lang={lang} onEdit={p.onEdit} />}
               <button
                 className="btn btn-sm"
                 onClick={() => p.update({ interval_secs: null, show_in_tray: true, notify: true, hidden_windows: [], alias: null })}
@@ -258,16 +271,12 @@ export default function ProvidersPane() {
   const data = useStore((s) => s.data);
   const saveSettings = useStore((s) => s.saveSettings);
   const [openId, setOpenId] = useState<string | null>(null);
+  /** The add/edit form: a new provider, or the id of the one being edited. */
+  const [form, setForm] = useState<{ edit: string | null } | null>(null);
   const [drag, setDrag] = useState<Drag | null>(null);
   const [instant, setInstant] = useState(false);
   const rows = useRef(new Map<string, HTMLDivElement>());
   const geo = useRef<{ rects: DOMRect[]; startY: number; gap: number } | null>(null);
-  const [now, setNow] = useState(() => Date.now());
-
-  useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), 10_000);
-    return () => clearInterval(id);
-  }, []);
 
   if (!data) return null;
   const s = data.settings;
@@ -367,6 +376,9 @@ export default function ProvidersPane() {
       <div className="ptoolbar">
         <span className="pcount">{t(lang, "provCount", { n: String(enabledCount), m: String(s.providers.length) })}</span>
         <div className="ptoolbar-actions">
+          <button className="btn btn-sm btn-accent" disabled={form !== null} onClick={() => setForm({ edit: null })}>
+            {t(lang, "provAdd")}
+          </button>
           <button
             className="btn btn-sm"
             disabled={enabledCount === s.providers.length}
@@ -380,6 +392,15 @@ export default function ProvidersPane() {
         </div>
       </div>
 
+      {form && (
+        <CustomForm
+          key={form.edit ?? "new"}
+          initial={s.custom_providers.find((d) => d.id === form.edit) ?? null}
+          lang={lang}
+          onClose={() => setForm(null)}
+        />
+      )}
+
       <div className="plist">
         {s.providers.map((pref, i) => (
           <ProviderRow
@@ -387,8 +408,9 @@ export default function ProvidersPane() {
             pref={pref}
             st={data.providers.find((p) => p.id === pref.id)}
             s={s}
+            custom={s.custom_providers.find((d) => d.id === pref.id)}
+            onEdit={() => setForm({ edit: pref.id })}
             lang={lang}
-            now={now}
             open={openId === pref.id}
             onToggleOpen={() => setOpenId(openId === pref.id ? null : pref.id)}
             update={(patch) => update(pref.id, patch)}

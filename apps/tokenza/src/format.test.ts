@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatAgo, formatDuration, formatReset, toneFor, windowLabel } from "./format";
+import { formatDuration, formatReset, toneFor, windowLabel } from "./format";
 
 describe("toneFor", () => {
   it("uses the documented bands", () => {
@@ -30,14 +30,6 @@ describe("formatReset", () => {
   it("handles missing and past dates", () => {
     expect(formatReset(null, now, "ru")).toBe("");
     expect(formatReset("2026-10-16T11:00:00Z", now, "en")).toBe("resets now");
-  });
-});
-
-describe("formatAgo", () => {
-  const now = Date.parse("2026-10-16T12:00:30Z");
-  it("formats age", () => {
-    expect(formatAgo("2026-10-16T12:00:00Z", now, "ru")).toBe("обновлено 30 с назад");
-    expect(formatAgo("2026-10-16T12:00:28Z", now, "en")).toBe("updated just now");
   });
 });
 

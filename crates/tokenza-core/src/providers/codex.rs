@@ -21,7 +21,7 @@ fn tokens() -> Option<Value> {
 
 #[async_trait]
 impl Provider for Codex {
-    fn id(&self) -> &'static str {
+    fn id(&self) -> &str {
         "codex"
     }
 

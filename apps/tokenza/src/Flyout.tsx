@@ -1,11 +1,10 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { selectLang, useStore } from "./store";
+import { selectLang, useCustomProviders, useStore } from "./store";
 import { t, type Key } from "./i18n";
 import { ProviderLogo } from "./Logo";
 import { EnterContext, useCountUp } from "./motion";
 import {
-  PROVIDER_NAMES,
-  formatAgo,
+  providerName,
   formatDuration,
   formatReset,
   planLabel,
@@ -13,11 +12,11 @@ import {
   windowLabel,
   type Lang,
 } from "./format";
-import type { ProviderPref, ProviderState, UsageWindow } from "./types";
+import type { CustomDef, ProviderPref, ProviderState, UsageWindow } from "./types";
 import { AlertIcon, DensityIcon, GearIcon, LockIcon, OfflineIcon, RefreshIcon, SearchIcon } from "./icons";
 
 /** The user's alias when set, else the built-in provider name. */
-export const displayName = (id: string, pref?: ProviderPref) => pref?.alias?.trim() || PROVIDER_NAMES[id] || id;
+export const displayName = (id: string, pref?: ProviderPref, custom?: CustomDef[]) => pref?.alias?.trim() || providerName(id, custom);
 
 /** Limit windows of a provider minus the ones the user hid. */
 const visibleWindows = (p: ProviderState, pref?: ProviderPref): UsageWindow[] =>
@@ -94,8 +93,7 @@ function Banner({ icon, tone, title, hint }: { icon: ReactNode; tone: string; ti
   );
 }
 
-function errorBanner(p: ProviderState, lang: Lang) {
-  const name = PROVIDER_NAMES[p.id] ?? p.id;
+function errorBanner(p: ProviderState, lang: Lang, name: string) {
   const kind = p.error?.kind;
   const pick = (title: Key, hint: Key, icon: ReactNode, tone: string) => (
     <Banner icon={icon} tone={tone} title={t(lang, title)} hint={t(lang, hint, { name })} />
@@ -115,7 +113,7 @@ function errorBanner(p: ProviderState, lang: Lang) {
 
 export function ProviderCard({ p, lang, now, index = 0, pref }: { p: ProviderState; lang: Lang; now: number; index?: number; pref?: ProviderPref }) {
   const refresh = useStore((s) => s.refresh);
-  const name = displayName(p.id, pref);
+  const name = displayName(p.id, pref, useCustomProviders());
   const windows = visibleWindows(p, pref);
   // Claude's usage endpoint reports no plan; the placeholder label is not worth a pill.
   const account = p.snapshot?.account === "claude.ai" ? "" : (p.snapshot?.account ?? "");
@@ -145,18 +143,11 @@ export function ProviderCard({ p, lang, now, index = 0, pref }: { p: ProviderSta
 
       {p.status === "error" && (
         <>
-          {errorBanner(p, lang)}
+          {errorBanner(p, lang, name)}
           <button className="btn" onClick={refresh}>
             {t(lang, "retry")}
           </button>
         </>
-      )}
-
-      {p.status === "ok" && (
-        <div className="card-foot">
-          {formatAgo(p.snapshot?.fetched_at ?? p.last_attempt, now, lang)}
-          {p.poll && p.poll.state !== "steady" && p.poll.state !== "fixed" && ` · ${t(lang, "everyShort", { x: formatDuration(p.poll.interval_secs * 1000, lang) })}`}
-        </div>
       )}
     </section>
   );
@@ -197,11 +188,10 @@ function CompactRow({ w, lang, now }: { w: UsageWindow; lang: Lang; now: number 
 
 export function CompactCard({ p, lang, now, index = 0, pref }: { p: ProviderState; lang: Lang; now: number; index?: number; pref?: ProviderPref }) {
   const refresh = useStore((s) => s.refresh);
-  const name = displayName(p.id, pref);
+  const name = displayName(p.id, pref, useCustomProviders());
   const windows = visibleWindows(p, pref);
   const account = p.snapshot?.account === "claude.ai" ? "" : (p.snapshot?.account ?? "");
   const plan = p.status === "not_found" ? "" : planLabel(account);
-  const updated = p.status === "ok" ? formatAgo(p.snapshot?.fetched_at ?? p.last_attempt, now, lang) : "";
 
   let status: ReactNode = null;
   if (p.status === "not_found") {
@@ -235,7 +225,7 @@ export function CompactCard({ p, lang, now, index = 0, pref }: { p: ProviderStat
   }
 
   return (
-    <section className={`ccard stagger ${p.status === "not_found" ? "card-muted" : ""}`} aria-label={name} title={updated} style={cardStyle(index, p.id)}>
+    <section className={`ccard stagger ${p.status === "not_found" ? "card-muted" : ""}`} aria-label={name} style={cardStyle(index, p.id)}>
       <header className="ccard-head">
         <ProviderLogo id={p.id} name={name} small />
         <span className="ccard-name">{name}</span>
@@ -347,7 +337,6 @@ export default function Flyout() {
       )}
 
       <footer className="flyout-foot stagger" style={{ "--i": visible.length + 1 } as CSSProperties}>
-        <span>{compact ? "" : t(lang, "footer")}</span>
         <button className="icon-btn" onClick={openSettings} aria-label={t(lang, "settings")} title={t(lang, "settings")}>
           <GearIcon />
         </button>

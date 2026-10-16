@@ -60,7 +60,7 @@ fn session_cookie(jwt: &str) -> Option<String> {
 
 #[async_trait]
 impl Provider for Cursor {
-    fn id(&self) -> &'static str {
+    fn id(&self) -> &str {
         "cursor"
     }
 

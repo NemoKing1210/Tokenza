@@ -4,6 +4,7 @@ mod adaptive;
 mod i18n;
 mod notify;
 mod scheduler;
+mod secrets;
 mod settings;
 mod state;
 mod tray;
@@ -14,6 +15,7 @@ use tauri_plugin_autostart::{MacosLauncher, ManagerExt};
 
 use settings::Settings;
 use state::{AppState, StateDto};
+use tokenza_core::CustomDef;
 
 #[tauri::command]
 fn get_state(state: State<AppState>) -> StateDto {
@@ -37,6 +39,108 @@ fn set_settings(app: AppHandle, state: State<AppState>, new: Settings) -> Result
     scheduler::publish(&app);
     let _ = app.emit("settings-updated", &applied);
     Ok(applied)
+}
+
+/// What the UI shows for a rejected credential; the codes are mapped to translated text there.
+fn check_secret(value: &str) -> Result<&str, String> {
+    let value = value.trim();
+    if value.is_empty() {
+        return Err("empty".into());
+    }
+    if value.chars().count() > tokenza_core::secrets::MAX_LEN {
+        return Err("too_long".into());
+    }
+    Ok(value)
+}
+
+#[tauri::command]
+fn set_provider_secret(
+    app: AppHandle,
+    state: State<AppState>,
+    id: String,
+    field: String,
+    value: String,
+) -> Result<(), String> {
+    if !state.accepted_fields(&id).contains(&field.as_str()) {
+        return Err("unknown_field".into());
+    }
+    secrets::set(&id, &field, check_secret(&value)?).map_err(|e| format!("store_failed: {e}"))?;
+    state.mark_secret(&id, &field, true);
+    state.poll_soon(&id);
+    scheduler::publish(&app);
+    Ok(())
+}
+
+#[tauri::command]
+fn clear_provider_secret(
+    app: AppHandle,
+    state: State<AppState>,
+    id: String,
+    field: String,
+) -> Result<(), String> {
+    if !state.accepted_fields(&id).contains(&field.as_str()) {
+        return Err("unknown_field".into());
+    }
+    secrets::delete(&id, &field).map_err(|e| format!("store_failed: {e}"))?;
+    state.mark_secret(&id, &field, false);
+    state.poll_soon(&id);
+    scheduler::publish(&app);
+    Ok(())
+}
+
+/// Creates (empty `def.id`) or updates a user-defined provider. A new one needs its token;
+/// for an existing one `token` replaces the stored key only when given.
+#[tauri::command]
+fn save_custom_provider(
+    app: AppHandle,
+    state: State<AppState>,
+    def: CustomDef,
+    token: Option<String>,
+) -> Result<(), String> {
+    let is_new = def.id.is_empty();
+    let token = token.filter(|t| !t.trim().is_empty());
+    if is_new && token.is_none() {
+        return Err("empty".into());
+    }
+    if let Some(t) = &token {
+        check_secret(t)?;
+    }
+    let (saved, applied) = state.save_custom(def)?;
+    let field = tokenza_core::secrets::CUSTOM_FIELD;
+    if let Some(t) = &token {
+        if let Err(e) = secrets::set(&saved.id, field, t.trim()) {
+            // Without its key a new provider is only a broken card, so undo it.
+            if is_new {
+                if let Ok(back) = state.remove_custom(&saved.id) {
+                    let _ = back.save(&state.settings_path);
+                }
+            }
+            return Err(format!("store_failed: {e}"));
+        }
+        state.mark_secret(&saved.id, field, true);
+    }
+    applied
+        .save(&state.settings_path)
+        .map_err(|e| e.to_string())?;
+    state.poll_soon(&saved.id);
+    scheduler::publish(&app);
+    Ok(())
+}
+
+#[tauri::command]
+fn remove_custom_provider(
+    app: AppHandle,
+    state: State<AppState>,
+    id: String,
+) -> Result<(), String> {
+    let applied = state.remove_custom(&id)?;
+    // The definition is gone either way; a key that cannot be deleted stays harmlessly orphaned.
+    let _ = secrets::delete(&id, tokenza_core::secrets::CUSTOM_FIELD);
+    applied
+        .save(&state.settings_path)
+        .map_err(|e| e.to_string())?;
+    scheduler::publish(&app);
+    Ok(())
 }
 
 #[tauri::command]
@@ -114,6 +218,10 @@ fn main() {
             refresh,
             set_settings,
             reset_tuning,
+            set_provider_secret,
+            clear_provider_secret,
+            save_custom_provider,
+            remove_custom_provider,
             send_test_notification,
             set_flyout_height,
             open_settings,
@@ -122,8 +230,10 @@ fn main() {
         ])
         .setup(|app| {
             let path = app.path().app_config_dir()?.join("settings.json");
+            secrets::install();
             app.manage(AppState::new(path));
             let handle = app.handle().clone();
+            handle.state::<AppState>().load_secret_cache();
             sync_autostart(
                 &handle,
                 handle.state::<AppState>().lock().settings.autostart,

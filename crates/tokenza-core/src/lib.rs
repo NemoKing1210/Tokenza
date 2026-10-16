@@ -5,7 +5,9 @@ pub mod error;
 pub mod model;
 pub mod provider;
 pub mod providers;
+pub mod secrets;
 
 pub use error::ProviderError;
 pub use model::{Account, UsageSnapshot, UsageWindow, WindowKind};
 pub use provider::{all_providers, Provider};
+pub use providers::custom::{AuthScheme, CustomAuth, CustomDef, CustomWindow};

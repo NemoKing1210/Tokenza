@@ -164,6 +164,7 @@ mod tests {
             flyout_anchor: None,
             last_hidden: None,
             tuning_saved: String::new(),
+            secrets: Default::default(),
         }
     }
 

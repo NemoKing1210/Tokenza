@@ -6,7 +6,8 @@ use crate::{providers, Account, ProviderError, UsageSnapshot};
 
 #[async_trait]
 pub trait Provider: Send + Sync {
-    fn id(&self) -> &'static str;
+    /// Built-in providers return a fixed id; user-defined ones carry theirs.
+    fn id(&self) -> &str;
     /// Lowest polling interval the provider tolerates.
     fn min_interval(&self) -> Duration;
     /// Whether the agent has a login on this machine.
@@ -19,5 +20,7 @@ pub fn all_providers() -> Vec<Box<dyn Provider>> {
         Box::new(providers::claude::Claude),
         Box::new(providers::codex::Codex),
         Box::new(providers::cursor::Cursor),
+        Box::new(providers::opencode::OpenCode),
+        Box::new(providers::commandcode::CommandCode),
     ]
 }

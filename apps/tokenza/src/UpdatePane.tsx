@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Select, Switch } from "@fluentui/react-components";
 import { selectLang, useStore } from "./store";
 import { t, type Key } from "./i18n";
-import { PROVIDER_NAMES, formatDuration, type Lang } from "./format";
+import { formatDuration, providerName, type Lang } from "./format";
 import type { ProviderPref, ProviderState, Settings, TuneState } from "./types";
 import { Row, Segmented } from "./controls";
 
@@ -73,7 +73,7 @@ function countdown(iso: string | null, now: number): string | null {
 function ProviderTuning({ pref, st, s, now, lang }: { pref: ProviderPref; st: ProviderState | undefined; s: Settings; now: number; lang: Lang }) {
   const { saveSettings, resetTuning } = useStore.getState();
   const poll = st?.poll;
-  const name = PROVIDER_NAMES[pref.id] ?? pref.id;
+  const name = providerName(pref.id, s.custom_providers);
   const setOwn = (v: number | null) =>
     saveSettings({ providers: s.providers.map((p) => (p.id === pref.id ? { ...p, interval_secs: v } : p)) });
 

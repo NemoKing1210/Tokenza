@@ -63,7 +63,7 @@ Use short, imperative subject lines, for example `Fix tray ring colour at 100%`.
 
 Tokenza handles other tools' credentials, so these rules are strict:
 
-- Tokens are read into memory per request and dropped afterwards. **Never persist, log, print or transmit them anywhere except to the provider's own endpoint.**
+- Tokens are read into memory per request and dropped afterwards. **Never persist, log, print or transmit them anywhere except to the provider's own endpoint.** The only exception is a key the user types into Tokenza: it lives in the OS credential store, never in `settings.json`.
 - Never modify or refresh a user's credential files. Open third-party databases read-only.
 - No telemetry, analytics or additional network destinations. Adding a domain requires an issue discussion and an update to the table in the README.
 - Don't commit real tokens, even expired ones, in tests or fixtures. Use obviously fake values.

@@ -26,7 +26,14 @@ Everything that knows about a specific AI agent lives here, and nothing here kno
 - `Provider` trait (`provider.rs`): `detect()` finds a local login without touching the network; `fetch()` calls the provider's usage endpoint and returns a `UsageSnapshot`.
 - Data model (`model.rs`): a snapshot is a list of `UsageWindow`s (5-hour session, weekly, monthly, credits), each with an optional used percentage and reset time. Snapshots never contain tokens.
 - `ProviderError` (`error.rs`): typed failures (`NotLoggedIn`, `TokenExpired`, `RateLimited`, `SchemaChanged`, `Offline`). The UI chooses the card text and the suggested action from the kind.
-- `providers/`: one module per agent (`claude`, `codex`, `cursor`). Each reads its credentials per request, sends one HTTPS request to a single fixed domain, and parses the response into windows.
+- `providers/`: one module per agent (`claude`, `codex`, `cursor`, `opencode`, `commandcode`). Each reads its credentials per request, sends one HTTPS request to a single fixed domain, and parses the response into windows.
+
+### User-entered credentials and custom providers
+
+- `secrets.rs` (core) is a small hook: the host installs a `SecretSource`, and providers ask it for values the user typed (`secrets::get(provider, field)`). The core never stores anything.
+- `tokenza-app` implements that source with the OS credential store (`keyring`; Windows Credential Manager, entries named `Tokenza` / `<provider>/<field>`). `settings.json` holds only the *definitions* of custom providers, never their tokens, and the UI only learns which fields have a value.
+- `providers/custom.rs` turns a `CustomDef` (HTTPS URL, auth scheme, JSON paths per limit window) into a `Provider`. Definitions are validated on every load and save (HTTPS only, no URL credentials, bounded sizes) and the HTTP client refuses redirects so a token cannot be forwarded elsewhere.
+- The scheduler rebuilds the list of custom providers whenever their definitions change. Definitions only change through the `save_custom_provider` / `remove_custom_provider` commands, not through `set_settings`.
 
 ## `tokenza-app` (`apps/tokenza/src-tauri`)
 

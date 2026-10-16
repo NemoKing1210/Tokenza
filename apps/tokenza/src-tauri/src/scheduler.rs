@@ -5,7 +5,7 @@ use std::time::{Duration, Instant};
 
 use chrono::Utc;
 use tauri::{AppHandle, Emitter, Manager};
-use tokenza_core::{all_providers, Provider, ProviderError, UsageSnapshot};
+use tokenza_core::{all_providers, CustomDef, Provider, ProviderError, UsageSnapshot};
 
 use crate::adaptive::MAX_BACKOFF;
 use crate::state::{AppState, ErrorInfo};
@@ -24,14 +24,15 @@ enum Outcome {
 
 pub fn spawn(app: AppHandle) {
     tauri::async_runtime::spawn(async move {
-        let providers: Vec<Arc<dyn Provider>> =
-            all_providers().into_iter().map(Arc::from).collect();
+        let builtin: Vec<Arc<dyn Provider>> = all_providers().into_iter().map(Arc::from).collect();
+        // Providers the user defined, rebuilt only when their definition changes.
+        let mut custom: Vec<(CustomDef, Arc<dyn Provider>)> = Vec::new();
         let wake = app.state::<AppState>().wake.clone();
         {
             // Each provider's own minimum interval bounds what the tuner may choose.
             let state = app.state::<AppState>();
             let mut g = state.lock();
-            for p in &providers {
+            for p in &builtin {
                 if let Some(st) = g.providers.iter_mut().find(|s| s.id == p.id()) {
                     st.min_secs = p.min_interval().as_secs();
                 }
@@ -39,6 +40,12 @@ pub fn spawn(app: AppHandle) {
         }
         let mut manual = false;
         loop {
+            sync_custom(&app, &mut custom);
+            let providers: Vec<Arc<dyn Provider>> = builtin
+                .iter()
+                .cloned()
+                .chain(custom.iter().map(|(_, p)| p.clone()))
+                .collect();
             round(&app, &providers, manual).await;
             manual = false;
             tokio::select! {
@@ -47,6 +54,23 @@ pub fn spawn(app: AppHandle) {
             }
         }
     });
+}
+
+/// Brings the user-defined providers in line with the current settings.
+fn sync_custom(app: &AppHandle, custom: &mut Vec<(CustomDef, Arc<dyn Provider>)>) {
+    let defs = app
+        .state::<AppState>()
+        .lock()
+        .settings
+        .custom_providers
+        .clone();
+    custom.retain(|(d, _)| defs.contains(d));
+    for d in defs {
+        if !custom.iter().any(|(c, _)| *c == d) {
+            let p: Arc<dyn Provider> = Arc::from(d.clone().into_provider());
+            custom.push((d, p));
+        }
+    }
 }
 
 async fn round(app: &AppHandle, providers: &[Arc<dyn Provider>], manual: bool) {
@@ -89,7 +113,7 @@ async fn round(app: &AppHandle, providers: &[Arc<dyn Provider>], manual: bool) {
         .into_iter()
         .map(|p| {
             tauri::async_runtime::spawn(async move {
-                let id = p.id();
+                let id = p.id().to_string();
                 let min = p.min_interval();
                 let outcome = match p.detect() {
                     None => Outcome::NotFound,
@@ -106,7 +130,7 @@ async fn round(app: &AppHandle, providers: &[Arc<dyn Provider>], manual: bool) {
             continue;
         };
         let mut g = state.lock();
-        let params = g.settings.params(id, min);
+        let params = g.settings.params(&id, min);
         let Some(st) = g.providers.iter_mut().find(|s| s.id == id) else {
             continue;
         };

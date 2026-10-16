@@ -1,5 +1,5 @@
 use chrono::{DateTime, Utc};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 /// A detected login of an agent. Never holds a token.
 #[derive(Debug, Clone)]
@@ -16,7 +16,7 @@ pub struct UsageSnapshot {
     pub fetched_at: DateTime<Utc>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum WindowKind {
     Session5h,
     Weekly,
