@@ -5,6 +5,8 @@ use std::f32::consts::PI;
 use tiny_skia::{Color, FillRule, LineCap, Paint, PathBuilder, Pixmap, Stroke, Transform};
 use tokenza_core::{UsageWindow, WindowKind};
 
+use crate::logos::Logo;
+
 pub const SIZE: u32 = 32;
 
 #[derive(Clone, Copy, Default, Debug, PartialEq)]
@@ -123,20 +125,13 @@ fn fill_rect(pm: &mut Pixmap, x: f32, y: f32, w: f32, h: f32, color: Color) {
     }
 }
 
-/// The percentage as big digits ("62", "100"); a dash while there is no data.
-fn draw_number(pm: &mut Pixmap, pct: Option<f32>) {
+/// The percentage as pixel-font digits centered horizontally, `cell` px per font pixel, top at `y0`.
+fn draw_digits(pm: &mut Pixmap, pct: f32, cell: f32, y0: f32) {
     let size = SIZE as f32;
-    let Some(pct) = pct else {
-        fill_rect(pm, 8.0, size / 2.0 - 2.0, 16.0, 4.0, track_color());
-        return;
-    };
-    let value = pct.round().clamp(0.0, 100.0) as u32;
-    let text = value.to_string();
-    // Three digits need a smaller cell to fit the 32 px canvas.
-    let cell = if text.len() > 2 { 3.0 } else { 4.0 };
+    let text = pct.round().clamp(0.0, 100.0).to_string();
     let gap = cell / 2.0;
     let width = text.len() as f32 * 3.0 * cell + (text.len() as f32 - 1.0) * gap;
-    let (x0, y0) = ((size - width) / 2.0, (size - 5.0 * cell) / 2.0);
+    let x0 = (size - width) / 2.0;
     let color = tone(pct);
     for (n, ch) in text.chars().enumerate() {
         let glyph = DIGITS[ch.to_digit(10).unwrap_or(0) as usize];
@@ -158,36 +153,87 @@ fn draw_number(pm: &mut Pixmap, pct: Option<f32>) {
     }
 }
 
+/// A horizontal gauge: a track from `x0` to `x1` with the used share filled in the threshold color.
+fn draw_bar(pm: &mut Pixmap, pct: Option<f32>, (x0, x1): (f32, f32), y: f32, width: f32) {
+    if let Some(p) = line(x0, x1, y) {
+        pm.stroke_path(
+            &p,
+            &paint(track_color()),
+            &stroke(width),
+            Transform::identity(),
+            None,
+        );
+    }
+    if let Some(pct) = pct.filter(|p| *p > 0.0) {
+        let end = x0 + (x1 - x0) * (pct / 100.0).clamp(0.0, 1.0);
+        if let Some(p) = line(x0, end.max(x0 + 0.1), y) {
+            pm.stroke_path(
+                &p,
+                &paint(tone(pct)),
+                &stroke(width),
+                Transform::identity(),
+                None,
+            );
+        }
+    }
+}
+
+/// Height of the strip a provider icon keeps for its gauge. A tray slot is a small square, so the mark
+/// gets everything the gauge leaves.
+fn gauge_height(style: &str) -> f32 {
+    match style {
+        // Digits are 5 font pixels tall at 2 px each.
+        "number" => 10.0,
+        _ => 7.0,
+    }
+}
+
+/// Taskbar-neutral colors for marks that have no brand color of their own.
+fn neutral_mark(dark_taskbar: bool) -> Color {
+    if dark_taskbar {
+        Color::from_rgba8(0xF2, 0xF2, 0xF2, 0xFF)
+    } else {
+        Color::from_rgba8(0x20, 0x20, 0x20, 0xFF)
+    }
+}
+
+/// A provider's own icon: its mark on top and a compact gauge in the strip below.
+///
+/// The style picks the gauge: one bar for ring and pie (a circle does not fit the strip),
+/// two thin bars for bars (5 h and weekly), and digits for number.
+pub fn render_provider(style: &str, l: Levels, logo: &Logo, dark_taskbar: bool) -> Vec<u8> {
+    let mut pm = Pixmap::new(SIZE, SIZE).expect("non-zero size");
+    let mark = SIZE as f32 - gauge_height(style) - 1.0;
+    pm.fill_path(
+        logo.path(),
+        &paint(logo.color.unwrap_or_else(|| neutral_mark(dark_taskbar))),
+        FillRule::Winding,
+        logo.fit(0.0, 0.0, SIZE as f32, mark),
+        None,
+    );
+    match style {
+        "bars" => {
+            let span = (2.0, 30.0);
+            draw_bar(&mut pm, l.session.or(l.worst), span, 26.5, 3.0);
+            draw_bar(&mut pm, l.weekly.or(l.worst), span, 30.5, 3.0);
+        }
+        "number" => match l.worst {
+            Some(pct) => draw_digits(&mut pm, pct, 2.0, 22.0),
+            None => fill_rect(&mut pm, 8.0, 26.0, 16.0, 3.0, track_color()),
+        },
+        _ => draw_bar(&mut pm, l.worst, (3.5, 28.5), 28.0, 6.0),
+    }
+    unpremultiply(pm.data())
+}
+
 /// Returns `SIZE * SIZE * 4` RGBA bytes (straight alpha).
 pub fn render(style: &str, l: Levels) -> Vec<u8> {
     let mut pm = Pixmap::new(SIZE, SIZE).expect("non-zero size");
     let c = SIZE as f32 / 2.0;
     match style {
         "bars" => {
-            let rows = [(l.session.or(l.worst), 10.0), (l.weekly.or(l.worst), 22.0)];
-            for (pct, y) in rows {
-                if let Some(p) = line(5.0, 27.0, y) {
-                    pm.stroke_path(
-                        &p,
-                        &paint(track_color()),
-                        &stroke(7.0),
-                        Transform::identity(),
-                        None,
-                    );
-                }
-                if let Some(pct) = pct.filter(|p| *p > 0.0) {
-                    let x1 = 5.0 + 22.0 * (pct / 100.0).clamp(0.0, 1.0);
-                    if let Some(p) = line(5.0, x1.max(5.1), y) {
-                        pm.stroke_path(
-                            &p,
-                            &paint(tone(pct)),
-                            &stroke(7.0),
-                            Transform::identity(),
-                            None,
-                        );
-                    }
-                }
-            }
+            draw_bar(&mut pm, l.session.or(l.worst), (5.0, 27.0), 10.0, 7.0);
+            draw_bar(&mut pm, l.weekly.or(l.worst), (5.0, 27.0), 22.0, 7.0);
         }
         "pie" => {
             if let Some(p) = sector_path(c, c, 14.0, 1.0) {
@@ -211,7 +257,14 @@ pub fn render(style: &str, l: Levels) -> Vec<u8> {
                 }
             }
         }
-        "number" => draw_number(&mut pm, l.worst),
+        "number" => match l.worst {
+            // Three digits need a smaller cell to fit the 32 px canvas.
+            Some(pct) => {
+                let cell = if pct.round() >= 100.0 { 3.0 } else { 4.0 };
+                draw_digits(&mut pm, pct, cell, (SIZE as f32 - 5.0 * cell) / 2.0)
+            }
+            None => fill_rect(&mut pm, 8.0, c - 2.0, 16.0, 4.0, track_color()),
+        },
         _ => {
             if let Some(p) = arc_path(c, c, 12.0, 1.0) {
                 pm.stroke_path(
@@ -309,6 +362,46 @@ mod tests {
             assert!(alpha_sum(&b) > 0, "{style} draws something");
         }
         assert!(alpha_sum(&render("pie", at(90.0))) > alpha_sum(&render("pie", at(10.0))));
+    }
+
+    #[test]
+    fn provider_icons_carry_the_mark_and_a_gauge() {
+        let claude = crate::logos::logo("claude").unwrap();
+        let cursor = crate::logos::logo("cursor").unwrap();
+        let at = |pct| Levels {
+            worst: Some(pct),
+            session: Some(pct),
+            weekly: Some(pct / 2.0),
+        };
+        for style in ["ring", "bars", "pie", "number"] {
+            let with = render_provider(style, at(40.0), claude, true);
+            assert_eq!(with.len(), (SIZE * SIZE * 4) as usize, "{style}");
+            assert!(
+                alpha_sum(&with)
+                    > alpha_sum(&render_provider(style, Levels::default(), claude, true)) / 2,
+                "{style} draws the mark with and without data"
+            );
+            assert_ne!(
+                with,
+                render_provider(style, at(40.0), cursor, true),
+                "{style}: another provider looks different"
+            );
+        }
+        assert!(
+            alpha_sum(&render_provider("ring", at(90.0), claude, true))
+                > alpha_sum(&render_provider("ring", at(10.0), claude, true)),
+            "the gauge grows with usage"
+        );
+        assert_ne!(
+            render_provider("ring", at(40.0), cursor, true),
+            render_provider("ring", at(40.0), cursor, false),
+            "a mark without a brand color follows the taskbar"
+        );
+        assert_eq!(
+            render_provider("ring", at(40.0), claude, true),
+            render_provider("ring", at(40.0), claude, false),
+            "a brand color does not"
+        );
     }
 
     #[test]

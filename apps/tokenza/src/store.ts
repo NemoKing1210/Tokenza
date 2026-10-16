@@ -23,7 +23,7 @@ interface Store {
   /** True while a manual refresh is in flight. */
   refreshing: boolean;
   /** Flyout lifecycle from the backend: "hidden" before it is shown, "shown" after. */
-  flyout: { phase: "hidden" | "shown"; enter: number };
+  flyout: { phase: "hidden" | "shown"; enter: number; /** Provider whose own tray icon opened the flyout; its card is highlighted. */ focus: string | null };
   init: () => Promise<void>;
   refresh: () => void;
   resetTuning: (id: string) => void;
@@ -61,7 +61,7 @@ export const useStore = create<Store>((set, get) => {
     data: null,
     refreshing: false,
     // Outside Tauri (browser preview) there is no window lifecycle, so the flyout is simply shown.
-    flyout: { phase: inTauri ? "hidden" : "shown", enter: 1 },
+    flyout: { phase: inTauri ? "hidden" : "shown", enter: 1, focus: inTauri ? null : new URLSearchParams(location.search).get("focus") },
 
     async init() {
       if (started) return;
@@ -71,7 +71,7 @@ export const useStore = create<Store>((set, get) => {
         set({ data: demoState() });
         // Stands in for the window being shown again: coming back to the tab replays the entrance.
         document.addEventListener("visibilitychange", () => {
-          if (document.visibilityState === "visible") set((s) => ({ flyout: { phase: "shown", enter: s.flyout.enter + 1 } }));
+          if (document.visibilityState === "visible") set((s) => ({ flyout: { ...s.flyout, phase: "shown", enter: s.flyout.enter + 1 } }));
         });
         return;
       }
@@ -84,11 +84,11 @@ export const useStore = create<Store>((set, get) => {
         const cur = get().data;
         if (cur) set({ data: { ...cur, settings: e.payload } });
       });
-      await listen("flyout-shown", () => set((s) => ({ flyout: { phase: "shown", enter: s.flyout.enter + 1 } })));
-      await listen("flyout-hidden", () => set((s) => ({ flyout: { ...s.flyout, phase: "hidden" } })));
+      await listen<string | null>("flyout-shown", (e) => set((s) => ({ flyout: { phase: "shown", enter: s.flyout.enter + 1, focus: e.payload ?? null } })));
+      await listen("flyout-hidden", () => set((s) => ({ flyout: { ...s.flyout, phase: "hidden", focus: null } })));
       // Safety nets: if the show event fired before this listener existed (right after launch), or got lost,
       // the flyout would stay invisible. Ask the window itself, and follow the page visibility too.
-      const reveal = () => set((s) => (s.flyout.phase === "hidden" ? { flyout: { phase: "shown", enter: s.flyout.enter + 1 } } : s));
+      const reveal = () => set((s) => (s.flyout.phase === "hidden" ? { flyout: { ...s.flyout, phase: "shown", enter: s.flyout.enter + 1 } } : s));
       document.addEventListener("visibilitychange", () => document.visibilityState === "visible" && reveal());
       try {
         const { getCurrentWindow } = await import("@tauri-apps/api/window");
@@ -242,7 +242,7 @@ function demoSaveCustom(set: StoreApi["set"], get: StoreApi["get"], def: CustomD
       ];
   const prefs = exists
     ? cur.settings.providers
-    : [...cur.settings.providers, { id, enabled: true, interval_secs: null, show_in_tray: true, notify: true, hidden_windows: [], alias: null }];
+    : [...cur.settings.providers, { id, enabled: true, interval_secs: null, show_in_tray: true, own_tray_icon: false, notify: true, hidden_windows: [], alias: null }];
   set({ data: { ...cur, providers, settings: { ...cur.settings, custom_providers, providers: prefs } } });
   return null;
 }

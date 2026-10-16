@@ -57,6 +57,8 @@ export interface ProviderPref {
   interval_secs: number | null;
   /** Whether this provider's limits count toward the tray icon when the tray follows the chosen ones. */
   show_in_tray: boolean;
+  /** Whether this provider also gets a tray icon of its own, next to the main one. */
+  own_tray_icon: boolean;
   /** Whether this provider may send threshold toasts. */
   notify: boolean;
   /** Labels of limit windows hidden everywhere, e.g. "Week · Opus". */

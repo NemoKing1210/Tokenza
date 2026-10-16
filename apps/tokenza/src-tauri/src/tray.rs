@@ -1,19 +1,24 @@
 //! Tray icon, its menu, and the flyout window that opens from it.
 
+use std::sync::{Mutex, PoisonError};
 use std::time::{Duration, Instant};
 
-use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
-use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
+use tauri::menu::{Menu, MenuEvent, MenuItem, PredefinedMenuItem};
+use tauri::tray::{MouseButton, MouseButtonState, TrayIcon, TrayIconBuilder, TrayIconEvent};
 use tauri::{
-    image::Image, AppHandle, Emitter, LogicalSize, Manager, PhysicalPosition, WebviewWindow,
+    image::Image, AppHandle, Emitter, LogicalSize, Manager, PhysicalPosition, Theme, WebviewWindow,
 };
+use tokenza_core::UsageWindow;
 
 use crate::i18n;
+use crate::logos;
 use crate::settings::Settings;
 use crate::state::{AppState, FlyoutAnchor, ProviderState};
 use crate::tray_icon::{self, Levels};
 
 const TRAY_ID: &str = "main";
+/// Providers that currently have an icon of their own, so one that was switched off can be removed.
+static PROVIDER_ICONS: Mutex<Vec<String>> = Mutex::new(Vec::new());
 pub const FLYOUT_WIDTH: f64 = 360.0;
 /// A tray click right after the flyout lost focus is the click that closed it, not a new open.
 const REOPEN_GUARD: Duration = Duration::from_millis(350);
@@ -34,10 +39,26 @@ fn build_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
     )
 }
 
-/// Re-applies the language to everything the backend owns: tray menu and the settings window title.
+const PROVIDER_ICON_PREFIX: &str = "provider-";
+
+fn provider_icon_id(provider: &str) -> String {
+    format!("{PROVIDER_ICON_PREFIX}{provider}")
+}
+
+/// Re-applies the language to everything the backend owns: tray menus and the settings window title.
 pub fn apply_language(app: &AppHandle) {
-    if let (Some(tray), Ok(menu)) = (app.tray_by_id(TRAY_ID), build_menu(app)) {
-        let _ = tray.set_menu(Some(menu));
+    let mut ids = vec![TRAY_ID.to_string()];
+    ids.extend(
+        PROVIDER_ICONS
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .iter()
+            .map(|p| provider_icon_id(p)),
+    );
+    for id in ids {
+        if let (Some(tray), Ok(menu)) = (app.tray_by_id(&id), build_menu(app)) {
+            let _ = tray.set_menu(Some(menu));
+        }
     }
     let lang = app.state::<AppState>().lock().settings.resolved_lang();
     if let Some(w) = app.get_webview_window("settings") {
@@ -45,55 +66,80 @@ pub fn apply_language(app: &AppHandle) {
     }
 }
 
-pub fn setup(app: &AppHandle) -> tauri::Result<()> {
-    let menu = build_menu(app)?;
+fn on_menu_event(app: &AppHandle, ev: MenuEvent) {
+    match ev.id().as_ref() {
+        "open" => show_flyout(app, None, None),
+        "refresh" => app.state::<AppState>().wake.notify_one(),
+        "settings" => open_settings(app),
+        "quit" => app.exit(0),
+        _ => {}
+    }
+}
 
-    TrayIconBuilder::with_id(TRAY_ID)
-        .icon(render(app))
-        .tooltip("Tokenza")
-        .menu(&menu)
+/// A left click opens the flyout next to whichever icon was clicked.
+fn on_tray_event(tray: &TrayIcon, ev: TrayIconEvent) {
+    if let TrayIconEvent::Click {
+        button: MouseButton::Left,
+        button_state: MouseButtonState::Up,
+        rect,
+        ..
+    } = ev
+    {
+        let app = tray.app_handle();
+        let scale = app
+            .get_webview_window("flyout")
+            .and_then(|w| w.scale_factor().ok())
+            .unwrap_or(1.0);
+        let pos = rect.position.to_physical::<i32>(scale);
+        let size = rect.size.to_physical::<u32>(scale);
+        // A provider's own icon opens the flyout with that provider's card highlighted.
+        let focus = tray.id().as_ref().strip_prefix(PROVIDER_ICON_PREFIX);
+        toggle_flyout(app, (pos.x, pos.y, size.width, size.height), focus);
+    }
+}
+
+fn build_icon(
+    app: &AppHandle,
+    id: &str,
+    icon: Image<'static>,
+    tooltip: &str,
+) -> tauri::Result<TrayIcon> {
+    TrayIconBuilder::with_id(id)
+        .icon(icon)
+        .tooltip(tooltip)
+        .menu(&build_menu(app)?)
         .show_menu_on_left_click(false)
-        .on_menu_event(|app, ev| match ev.id().as_ref() {
-            "open" => show_flyout(app, None),
-            "refresh" => app.state::<AppState>().wake.notify_one(),
-            "settings" => open_settings(app),
-            "quit" => app.exit(0),
-            _ => {}
-        })
-        .on_tray_icon_event(|tray, ev| {
-            if let TrayIconEvent::Click {
-                button: MouseButton::Left,
-                button_state: MouseButtonState::Up,
-                rect,
-                ..
-            } = ev
-            {
-                let app = tray.app_handle();
-                let scale = app
-                    .get_webview_window("flyout")
-                    .and_then(|w| w.scale_factor().ok())
-                    .unwrap_or(1.0);
-                let pos = rect.position.to_physical::<i32>(scale);
-                let size = rect.size.to_physical::<u32>(scale);
-                toggle_flyout(app, (pos.x, pos.y, size.width, size.height));
-            }
-        })
-        .build(app)?;
+        .on_menu_event(on_menu_event)
+        .on_tray_icon_event(on_tray_event)
+        .build(app)
+}
+
+pub fn setup(app: &AppHandle) -> tauri::Result<()> {
+    build_icon(app, TRAY_ID, render(app), "Tokenza")?;
+    sync_provider_icons(app);
     Ok(())
 }
 
-/// What the icon draws: the chosen providers' limit windows, minus hidden ones and unwanted kinds.
+/// The limit windows the icon may draw for one provider: not hidden, and of a followed kind.
+fn tray_windows<'a>(
+    settings: &'a Settings,
+    p: &'a ProviderState,
+) -> impl Iterator<Item = &'a UsageWindow> {
+    p.snapshot
+        .iter()
+        .flat_map(|s| s.windows.iter())
+        .filter(|w| {
+            settings.window_visible(&p.id, &w.label) && settings.counts_kind_in_tray(w.kind)
+        })
+}
+
+/// What the main icon draws: the chosen providers' limit windows.
 fn tray_levels(settings: &Settings, providers: &[ProviderState]) -> Levels {
     Levels::from_windows(
         providers
             .iter()
             .filter(|p| p.enabled && settings.counts_in_tray(&p.id))
-            .filter_map(|p| p.snapshot.as_ref().map(|s| (p.id.as_str(), s)))
-            .flat_map(|(id, s)| {
-                s.windows.iter().filter(move |w| {
-                    settings.window_visible(id, &w.label) && settings.counts_kind_in_tray(w.kind)
-                })
-            }),
+            .flat_map(|p| tray_windows(settings, p)),
     )
 }
 
@@ -150,9 +196,77 @@ pub fn refresh(app: &AppHandle) {
         let _ = tray.set_icon(Some(render(app)));
         let _ = tray.set_tooltip(Some(tooltip(app)));
     }
+    sync_provider_icons(app);
 }
 
-fn toggle_flyout(app: &AppHandle, anchor: (i32, i32, u32, u32)) {
+/// One provider's tooltip: its name and every visible limit, within Windows' length cap.
+fn provider_tooltip(settings: &Settings, p: &ProviderState) -> String {
+    let name = settings.display_name(&p.id);
+    let limits: Vec<String> = p
+        .snapshot
+        .iter()
+        .flat_map(|s| s.windows.iter())
+        .filter(|w| settings.window_visible(&p.id, &w.label))
+        .filter_map(|w| Some(format!("{} {}%", w.label, w.used_pct?.round())))
+        .collect();
+    let text = if limits.is_empty() {
+        name
+    } else {
+        format!("{name}\n{}", limits.join(" · "))
+    };
+    text.chars().take(120).collect()
+}
+
+/// Gives every provider that asked for one an icon of its own next to the main one, and removes
+/// the icons of providers that no longer want it.
+fn sync_provider_icons(app: &AppHandle) {
+    // The flyout follows the system theme, which is a good guess for the taskbar's.
+    let dark = app
+        .get_webview_window("flyout")
+        .and_then(|w| w.theme().ok())
+        .is_none_or(|t| t != Theme::Light);
+    let wanted: Vec<(String, Image<'static>, String)> = {
+        let state = app.state::<AppState>();
+        let g = state.lock();
+        let s = &g.settings;
+        g.providers
+            .iter()
+            .filter(|p| p.enabled && s.pref(&p.id).is_some_and(|pref| pref.own_tray_icon))
+            .map(|p| {
+                let levels = Levels::from_windows(tray_windows(s, p));
+                // A provider the user defined has no mark, so it gets the plain gauge.
+                let rgba = match logos::logo(&p.id) {
+                    Some(logo) => tray_icon::render_provider(&s.tray_style, levels, logo, dark),
+                    None => tray_icon::render(&s.tray_style, levels),
+                };
+                let image = Image::new_owned(rgba, tray_icon::SIZE, tray_icon::SIZE);
+                (p.id.clone(), image, provider_tooltip(s, p))
+            })
+            .collect()
+    };
+
+    let mut live = PROVIDER_ICONS
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner);
+    live.retain(|id| {
+        let keep = wanted.iter().any(|(w, ..)| w == id);
+        if !keep {
+            app.remove_tray_by_id(&provider_icon_id(id));
+        }
+        keep
+    });
+    for (id, image, tip) in wanted {
+        let tray_id = provider_icon_id(&id);
+        if let Some(tray) = app.tray_by_id(&tray_id) {
+            let _ = tray.set_icon(Some(image));
+            let _ = tray.set_tooltip(Some(tip));
+        } else if build_icon(app, &tray_id, image, &tip).is_ok() {
+            live.push(id);
+        }
+    }
+}
+
+fn toggle_flyout(app: &AppHandle, anchor: (i32, i32, u32, u32), focus: Option<&str>) {
     let Some(w) = app.get_webview_window("flyout") else {
         return;
     };
@@ -167,7 +281,7 @@ fn toggle_flyout(app: &AppHandle, anchor: (i32, i32, u32, u32)) {
         .is_some_and(|t| t.elapsed() < REOPEN_GUARD);
     if !recently_hidden {
         let (x, y, w, h) = anchor;
-        show_flyout(app, Some(FlyoutAnchor::Tray(x, y, w, h)));
+        show_flyout(app, Some(FlyoutAnchor::Tray(x, y, w, h)), focus);
     }
 }
 
@@ -190,11 +304,12 @@ pub fn toggle_flyout_centered(app: &AppHandle) {
             Some((m.position().x, m.position().y))
         });
     if let Some((x, y)) = point {
-        show_flyout(app, Some(FlyoutAnchor::Centered(x, y)));
+        show_flyout(app, Some(FlyoutAnchor::Centered(x, y)), None);
     }
 }
 
-pub fn show_flyout(app: &AppHandle, anchor: Option<FlyoutAnchor>) {
+/// Opens the flyout; `focus` names a provider whose card the UI should highlight.
+pub fn show_flyout(app: &AppHandle, anchor: Option<FlyoutAnchor>, focus: Option<&str>) {
     let Some(w) = app.get_webview_window("flyout") else {
         return;
     };
@@ -203,9 +318,23 @@ pub fn show_flyout(app: &AppHandle, anchor: Option<FlyoutAnchor>) {
     }
     place(&w);
     // Tell the UI first so it can start its entrance animation as the window appears.
-    let _ = app.emit("flyout-shown", ());
+    let _ = app.emit("flyout-shown", focus);
     let _ = w.show();
     let _ = w.set_focus();
+}
+
+/// The monitor the flyout belongs on: the one of its anchor, else the primary one.
+fn flyout_monitor(w: &WebviewWindow) -> Option<tauri::Monitor> {
+    let app = w.app_handle();
+    let anchor = app.state::<AppState>().lock().flyout_anchor;
+    anchor
+        .and_then(|a| {
+            let (x, y) = match a {
+                FlyoutAnchor::Tray(x, y, _, _) | FlyoutAnchor::Centered(x, y) => (x, y),
+            };
+            app.monitor_from_point(x as f64, y as f64).ok().flatten()
+        })
+        .or_else(|| w.primary_monitor().ok().flatten())
 }
 
 /// Positions the flyout next to the tray icon, kept inside the monitor's work area.
@@ -217,15 +346,7 @@ pub fn place(w: &WebviewWindow) {
     };
     let (ww, wh) = (size.width as i32, size.height as i32);
 
-    let monitor = anchor
-        .and_then(|a| {
-            let (x, y) = match a {
-                FlyoutAnchor::Tray(x, y, _, _) | FlyoutAnchor::Centered(x, y) => (x, y),
-            };
-            app.monitor_from_point(x as f64, y as f64).ok().flatten()
-        })
-        .or_else(|| w.primary_monitor().ok().flatten());
-    let Some(m) = monitor else { return };
+    let Some(m) = flyout_monitor(w) else { return };
     let wa = m.work_area();
     let (left, top) = (wa.position.x, wa.position.y);
     let (right, bottom) = (left + wa.size.width as i32, top + wa.size.height as i32);
@@ -256,7 +377,12 @@ pub fn resize_flyout(app: &AppHandle, height: f64) {
     let Some(w) = app.get_webview_window("flyout") else {
         return;
     };
-    let h = height.clamp(120.0, 900.0);
+    // Taller than the screen's work area is pointless: the page scrolls inside the window instead.
+    let room = flyout_monitor(&w)
+        .map(|m| m.work_area().size.height as f64 / m.scale_factor() - 2.0 * GAP as f64)
+        .unwrap_or(900.0)
+        .max(120.0);
+    let h = height.clamp(120.0, room);
     let _ = w.set_size(LogicalSize::new(FLYOUT_WIDTH, h));
     if w.is_visible().unwrap_or(false) {
         place(&w);
@@ -366,6 +492,40 @@ mod tests {
         assert_eq!(
             (l.worst, l.session, l.weekly),
             (Some(30.0), Some(30.0), None)
+        );
+    }
+
+    #[test]
+    fn a_provider_icon_draws_only_that_provider() {
+        let providers = sample();
+        let s = Settings::default();
+        let claude = Levels::from_windows(tray_windows(&s, &providers[0]));
+        assert_eq!(
+            (claude.worst, claude.session, claude.weekly),
+            (Some(50.0), Some(30.0), Some(50.0))
+        );
+        let codex = Levels::from_windows(tray_windows(&s, &providers[1]));
+        assert_eq!(codex.worst, Some(80.0));
+    }
+
+    #[test]
+    fn provider_tooltip_names_the_provider_and_lists_visible_limits() {
+        let mut s = Settings::default();
+        let providers = sample();
+        assert_eq!(
+            provider_tooltip(&s, &providers[0]),
+            "Claude Code\n5 h 30% · Week 50%"
+        );
+        s.providers
+            .iter_mut()
+            .find(|p| p.id == "claude")
+            .unwrap()
+            .hidden_windows = vec!["Week".into()];
+        assert_eq!(provider_tooltip(&s, &providers[0]), "Claude Code\n5 h 30%");
+        assert_eq!(
+            provider_tooltip(&s, &ProviderState::new("cursor", true)),
+            "Cursor",
+            "no data yet: just the name"
         );
     }
 

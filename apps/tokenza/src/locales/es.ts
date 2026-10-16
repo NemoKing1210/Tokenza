@@ -67,6 +67,8 @@ export const es: Dict = {
   trayKinds: "Límites",
   trayKindsHint: "El icono solo mira los periodos activados; al menos uno debe seguir activado",
   trayKindMonthly: "Mes",
+  trayOwn: "Iconos propios",
+  trayOwnHint: "Cada proveedor marcado recibe su propio icono junto al principal. Windows puede ocultar los iconos nuevos; arrástralos a la barra de tareas",
   viewMode: "Vista del panel",
   viewModeHint: "Estándar muestra detalles; compacta, una línea por ventana de límite",
   viewStandard: "Estándar",

@@ -144,6 +144,26 @@ function ProviderPicker({ s, lang, single }: { s: Settings; lang: Lang; single: 
   );
 }
 
+/** One switch per provider: each ticked one gets its own icon in the taskbar, next to the main one. */
+function OwnIcons({ s, lang }: { s: Settings; lang: Lang }) {
+  const saveSettings = useStore((st) => st.saveSettings);
+  const name = (p: ProviderPref) => p.alias?.trim() || providerName(p.id, s.custom_providers);
+  const setFlag = (id: string, own: boolean) =>
+    saveSettings({ providers: s.providers.map((p) => (p.id === id ? { ...p, own_tray_icon: own } : p)) }, { instant: true });
+  return (
+    <div className="wlist tproviders" role="group" aria-label={t(lang, "trayOwn")}>
+      {s.providers.map((p) => (
+        <label className={p.enabled ? "wrow" : "wrow is-off"} key={p.id}>
+          <ProviderLogo id={p.id} name={name(p)} small />
+          <span className="wrow-name">{name(p)}</span>
+          {!p.enabled && <span className="wrow-pct">{t(lang, "off")}</span>}
+          <Switch checked={p.own_tray_icon} disabled={!p.enabled} onChange={(_, d) => setFlag(p.id, d.checked)} aria-label={name(p)} />
+        </label>
+      ))}
+    </div>
+  );
+}
+
 export default function TrayPane() {
   const data = useStore((st) => st.data);
   const saveSettings = useStore((st) => st.saveSettings);
@@ -181,6 +201,10 @@ export default function TrayPane() {
           <ProviderPicker s={s} lang={lang} single={s.tray_source === "single"} />
         </>
       )}
+
+      <h2 className="subhead">{t(lang, "trayOwn")}</h2>
+      <p className="lead">{t(lang, "trayOwnHint")}</p>
+      <OwnIcons s={s} lang={lang} />
 
       <h2 className="subhead">{t(lang, "trayKinds")}</h2>
       <p className="lead">{t(lang, "trayKindsHint")}</p>

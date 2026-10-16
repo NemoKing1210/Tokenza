@@ -67,6 +67,8 @@ export const de: Dict = {
   trayKinds: "Limits",
   trayKindsHint: "Das Symbol berücksichtigt nur die eingeschalteten Zeiträume; mindestens einer bleibt eingeschaltet",
   trayKindMonthly: "Monat",
+  trayOwn: "Eigene Symbole",
+  trayOwnHint: "Jeder markierte Anbieter erhält neben dem Hauptsymbol ein eigenes Symbol. Windows legt neue Symbole evtl. in den versteckten Bereich; ziehen Sie sie in die Taskleiste",
   viewMode: "Ansicht des Flyouts",
   viewModeHint: "Standard zeigt Details, kompakt eine Zeile pro Limit-Fenster",
   viewStandard: "Standard",

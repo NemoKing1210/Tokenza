@@ -65,6 +65,8 @@ export const en = {
   trayKinds: "Limits",
   trayKindsHint: "The icon looks only at the periods left on; at least one stays on",
   trayKindMonthly: "Month",
+  trayOwn: "Separate icons",
+  trayOwnHint: "Each ticked provider gets its own icon next to the main one. Windows may place new icons in the hidden tray; drag them onto the taskbar",
   viewMode: "Flyout view",
   viewModeHint: "Standard shows details, compact is one line per limit window",
   viewStandard: "Standard",

@@ -120,7 +120,7 @@ function errorBanner(p: ProviderState, lang: Lang, name: string) {
   }
 }
 
-export function ProviderCard({ p, lang, now, index = 0, pref }: { p: ProviderState; lang: Lang; now: number; index?: number; pref?: ProviderPref }) {
+export function ProviderCard({ p, lang, now, index = 0, pref, focused = false }: { p: ProviderState; lang: Lang; now: number; index?: number; pref?: ProviderPref; focused?: boolean }) {
   const refresh = useStore((s) => s.refresh);
   const name = displayName(p.id, pref, useCustomProviders());
   const windows = visibleWindows(p, pref);
@@ -129,7 +129,12 @@ export function ProviderCard({ p, lang, now, index = 0, pref }: { p: ProviderSta
   const plan = p.status === "not_found" ? t(lang, "notFound") : planLabel(account);
 
   return (
-    <section className={`card stagger ${p.status === "not_found" ? "card-muted" : ""}`} aria-label={name} style={cardStyle(index, p.id)}>
+    <section
+      className={`card stagger${p.status === "not_found" ? " card-muted" : ""}${focused ? " is-focus" : ""}`}
+      aria-label={name}
+      data-provider={p.id}
+      style={cardStyle(index, p.id)}
+    >
       <header className="card-head">
         <ProviderLogo id={p.id} name={name} />
         <span className="card-name">{name}</span>
@@ -203,7 +208,7 @@ function CompactRow({ w, lang, now }: { w: UsageWindow; lang: Lang; now: number 
   );
 }
 
-export function CompactCard({ p, lang, now, index = 0, pref }: { p: ProviderState; lang: Lang; now: number; index?: number; pref?: ProviderPref }) {
+export function CompactCard({ p, lang, now, index = 0, pref, focused = false }: { p: ProviderState; lang: Lang; now: number; index?: number; pref?: ProviderPref; focused?: boolean }) {
   const refresh = useStore((s) => s.refresh);
   const name = displayName(p.id, pref, useCustomProviders());
   const windows = visibleWindows(p, pref);
@@ -245,7 +250,12 @@ export function CompactCard({ p, lang, now, index = 0, pref }: { p: ProviderStat
   }
 
   return (
-    <section className={`ccard stagger ${p.status === "not_found" ? "card-muted" : ""}`} aria-label={name} style={cardStyle(index, p.id)}>
+    <section
+      className={`ccard stagger${p.status === "not_found" ? " card-muted" : ""}${focused ? " is-focus" : ""}`}
+      aria-label={name}
+      data-provider={p.id}
+      style={cardStyle(index, p.id)}
+    >
       <header className="ccard-head">
         <ProviderLogo id={p.id} name={name} small />
         <span className="ccard-name">{name}</span>
@@ -309,6 +319,14 @@ export default function Flyout() {
     };
   }, [setFlyoutHeight, data === null]);
 
+  // A tall flyout scrolls: each show starts at the top, or at the highlighted card.
+  useEffect(() => {
+    if (flyout.phase !== "shown" || !data) return;
+    const card = flyout.focus && document.querySelector(`[data-provider="${CSS.escape(flyout.focus)}"]`);
+    if (card) card.scrollIntoView({ block: "nearest" });
+    else window.scrollTo(0, 0);
+  }, [flyout.phase, flyout.enter, flyout.focus, data === null]);
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && hideFlyout();
     window.addEventListener("keydown", onKey);
@@ -356,9 +374,9 @@ export default function Flyout() {
       {data && visible.length === 0 && <div className="card-note">{t(lang, "empty")}</div>}
       {visible.map((p, i) =>
         compact ? (
-          <CompactCard key={p.id} p={p} lang={lang} now={now} index={i + 1} pref={prefOf(p.id)} />
+          <CompactCard key={p.id} p={p} lang={lang} now={now} index={i + 1} pref={prefOf(p.id)} focused={flyout.focus === p.id} />
         ) : (
-          <ProviderCard key={p.id} p={p} lang={lang} now={now} index={i + 1} pref={prefOf(p.id)} />
+          <ProviderCard key={p.id} p={p} lang={lang} now={now} index={i + 1} pref={prefOf(p.id)} focused={flyout.focus === p.id} />
         ),
       )}
 

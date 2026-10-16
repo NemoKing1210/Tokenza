@@ -67,6 +67,8 @@ export const zh: Dict = {
   trayKinds: "额度",
   trayKindsHint: "图标只看已开启的周期，至少保留一项",
   trayKindMonthly: "每月",
+  trayOwn: "独立图标",
+  trayOwnHint: "每个勾选的服务商会在主图标旁获得自己的图标。Windows 可能会把新图标放进隐藏区域，请将其拖到任务栏上",
   viewMode: "浮窗视图",
   viewModeHint: "标准视图显示详情；紧凑视图每个额度窗口占一行",
   viewStandard: "标准",

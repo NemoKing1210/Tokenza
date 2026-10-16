@@ -3,6 +3,7 @@
 mod adaptive;
 mod hotkey;
 mod i18n;
+mod logos;
 mod notify;
 mod scheduler;
 mod secrets;
@@ -303,7 +304,7 @@ fn apply_backdrops(app: &AppHandle) {
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
-            tray::show_flyout(app, None);
+            tray::show_flyout(app, None, None);
         }))
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_notification::init())
@@ -361,6 +362,8 @@ fn main() {
                     tray::note_hidden(window.app_handle());
                 }
             }
+            // The marks in the per-provider tray icons follow the light or dark taskbar.
+            ("flyout", WindowEvent::ThemeChanged(_)) => tray::refresh(window.app_handle()),
             // Closing settings only hides it; the app lives in the tray.
             ("settings", WindowEvent::CloseRequested { api, .. }) => {
                 api.prevent_close();

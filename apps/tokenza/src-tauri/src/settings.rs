@@ -35,6 +35,8 @@ pub struct ProviderPref {
     pub interval_secs: Option<u64>,
     /// Whether this provider's limits count toward the tray icon when `tray_source` is "selected".
     pub show_in_tray: bool,
+    /// Whether this provider also gets a tray icon of its own, next to the main one.
+    pub own_tray_icon: bool,
     /// Whether this provider may send threshold toasts.
     pub notify: bool,
     /// Labels of limit windows to hide everywhere (flyout, tray, toasts), e.g. "Week · Opus".
@@ -50,6 +52,7 @@ impl Default for ProviderPref {
             enabled: true,
             interval_secs: None,
             show_in_tray: true,
+            own_tray_icon: false,
             notify: true,
             hidden_windows: Vec::new(),
             alias: None,

@@ -366,7 +366,7 @@ export default function ProvidersPane() {
 
   const resetAll = () =>
     saveSettings(
-      { providers: DEFAULT_ORDER.map((id) => ({ id, enabled: true, interval_secs: null, show_in_tray: true, notify: true, hidden_windows: [], alias: null })) },
+      { providers: DEFAULT_ORDER.map((id) => ({ id, enabled: true, interval_secs: null, show_in_tray: true, own_tray_icon: false, notify: true, hidden_windows: [], alias: null })) },
     );
 
   return (

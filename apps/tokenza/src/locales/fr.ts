@@ -67,6 +67,8 @@ export const fr: Dict = {
   trayKinds: "Limites",
   trayKindsHint: "L’icône ne regarde que les périodes activées ; au moins une reste activée",
   trayKindMonthly: "Mois",
+  trayOwn: "Icônes séparées",
+  trayOwnHint: "Chaque fournisseur coché reçoit sa propre icône à côté de l'icône principale. Windows peut masquer les nouvelles icônes ; faites-les glisser dans la barre des tâches",
   viewMode: "Affichage du panneau",
   viewModeHint: "Standard affiche les détails ; compact, une ligne par fenêtre de limite",
   viewStandard: "Standard",
