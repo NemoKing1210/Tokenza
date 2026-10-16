@@ -1,25 +1,88 @@
+<div align="center">
+
+<img src="apps/tokenza/src-tauri/icons/128x128.png" alt="Tokenza logo" width="96" height="96">
+
 # Tokenza
+
+**See how much of your AI coding agents' usage limits you have left, and when they reset.**
+
+A lightweight Windows tray app for Claude Code, Codex, Cursor and more.
 
 [![CI](https://github.com/NemoKing1210/Tokenza/actions/workflows/ci.yml/badge.svg)](https://github.com/NemoKing1210/Tokenza/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Platform: Windows 10/11](https://img.shields.io/badge/platform-Windows%2010%2F11-0078D4.svg)](#install)
+[![Built with Tauri](https://img.shields.io/badge/built%20with-Tauri%202-24C8D8.svg)](https://tauri.app/)
 
-A lightweight Windows tray app that shows how much of your AI coding agents' usage limits you have left, and when they reset.
+[Features](#features) · [Screenshots](#screenshots) · [Privacy](#privacy-and-network-access) · [Install](#install) · [Build](#build-from-source) · [Contributing](#contributing)
+
+<br>
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/flyout-dark.png">
+  <img src="docs/screenshots/flyout-light.png" alt="The Tokenza flyout with one card per provider" width="360">
+</picture>
+
+</div>
+
+<br>
 
 Tokenza watches **Claude Code**, **Codex**, **Cursor**, **OpenCode** (Go plan), **Command Code**, **Devin** and **Antigravity**. Click the tray icon to see every limit window at a glance, and get a notification before you run out.
 
+> [!NOTE]
 > **Status:** early development (v0.1). Windows 10/11 only. Expect rough edges.
 
 ## Features
 
-- **Tray icon** showing your worst limit as a ring, two bars (5 h and weekly), a pie or a number. A settings page lets you choose whose limits it follows (all providers, a few, or one) and which periods count. Any provider can also get an icon of its own, with its logo.
-- **Flyout** with one card per provider: usage, time until reset, last update. Standard and compact views.
-- **Global hotkey** (`Ctrl`+`Alt`+`T` by default) opens the flyout in the middle of the screen the mouse is on, without touching the tray; press it again to close. Can be turned off or changed in Settings.
-- **Notifications** when usage crosses a warning or critical threshold (once per reset cycle) and when a limit becomes available again.
-- **Smart polling** that tunes the refresh rate per provider: faster near a limit, slower when idle, and backs off when a provider rate-limits you. A fixed interval is also available.
-- **Per-provider settings**: display name, which limit windows to show, tray and notification participation, ordering.
-- **Light / dark / system theme** and Windows Acrylic backdrop.
-- **Localized** into English, Russian, Spanish, German, French, Portuguese (Brazil) and Simplified Chinese.
-- **Start with Windows** (optional).
+| | |
+|---|---|
+| 🎯 **Tray icon** | Shows your worst limit as a ring, two bars (5 h and weekly), a pie or a number. Choose whose limits it follows (all providers, a few, or one) and which periods count. Any provider can also get an icon of its own, with its logo. |
+| 🗂️ **Flyout** | One card per provider: usage, time until reset, last update. Standard and compact views. |
+| ⌨️ **Global hotkey** | `Ctrl`+`Alt`+`T` by default opens the flyout in the middle of the screen the mouse is on, without touching the tray; press it again to close. Can be turned off or changed in Settings. |
+| 🔔 **Notifications** | When usage crosses a warning or critical threshold (once per reset cycle) and when a limit becomes available again. |
+| 🧠 **Smart polling** | Tunes the refresh rate per provider: faster near a limit, slower when idle, and backs off when a provider rate-limits you. A fixed interval is also available. |
+| ⚙️ **Per-provider settings** | Display name, which limit windows to show, tray and notification participation, ordering. |
+| 🎨 **Look and feel** | Light / dark / system theme and the Windows Acrylic backdrop. |
+| 🌍 **Localized** | English, Russian, Spanish, German, French, Portuguese (Brazil) and Simplified Chinese. |
+| 🚀 **Start with Windows** | Optional. |
+
+## Screenshots
+
+> Captured from the UI with demo data; the numbers are made up. Images follow your GitHub theme.
+
+### Flyout
+
+Standard view on the left, compact view on the right. The colour follows the same thresholds as the tray icon: blue, amber from 70 %, red above 90 %.
+
+<table>
+  <tr>
+    <td align="center" valign="top">
+      <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/flyout-dark.png">
+        <img src="docs/screenshots/flyout-light.png" alt="Flyout, standard view" width="340">
+      </picture>
+    </td>
+    <td align="center" valign="top">
+      <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/flyout-compact-dark.png">
+        <img src="docs/screenshots/flyout-compact-light.png" alt="Flyout, compact view" width="340">
+      </picture>
+    </td>
+  </tr>
+</table>
+
+### Settings
+
+Reorder and switch providers, then pick how the tray icon looks and what it follows.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/settings-providers-dark.png">
+  <img src="docs/screenshots/settings-providers-light.png" alt="Settings: providers" width="720">
+</picture>
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/settings-tray-dark.png">
+  <img src="docs/screenshots/settings-tray-light.png" alt="Settings: tray icon styles" width="720">
+</picture>
 
 ## Privacy and network access
 
@@ -30,21 +93,42 @@ Tokenza is built to be easy to audit:
 - There is **no telemetry** and no Tokenza server.
 - The only network requests go to the provider you are tracking:
 
-| Provider    | Domain             | Credentials read from                                  |
-|-------------|--------------------|--------------------------------------------------------|
-| Claude Code | `api.anthropic.com`| `~/.claude/.credentials.json`                          |
-| Codex       | `chatgpt.com`      | `~/.codex/auth.json`                                   |
-| Cursor      | `cursor.com`       | Cursor's local `state.vscdb` (opened read-only)        |
-| OpenCode Go | `opencode.ai`      | `OPENCODE_GO_WORKSPACE_ID` and `OPENCODE_GO_AUTH_COOKIE` environment variables (see below) |
-| Command Code| `api.commandcode.ai`| `~/.commandcode/auth.json` (or `COMMAND_CODE_API_KEY`) |
-| Devin       | `server.codeium.com`| `%APPDATA%\Devin\credentials.toml` (the CLI's API key) |
-| Antigravity | `cloudcode-pa.googleapis.com`| `~/.gemini/antigravity-cli/antigravity-oauth-token` (read-only; unverified, see below) |
+| Provider     | Domain                         | Credentials read from                                                                       |
+|--------------|--------------------------------|---------------------------------------------------------------------------------------------|
+| Claude Code  | `api.anthropic.com`            | `~/.claude/.credentials.json`                                                               |
+| Codex        | `chatgpt.com`                  | `~/.codex/auth.json`                                                                        |
+| Cursor       | `cursor.com`                   | Cursor's local `state.vscdb` (opened read-only)                                             |
+| OpenCode Go  | `opencode.ai`                  | `OPENCODE_GO_WORKSPACE_ID` and `OPENCODE_GO_AUTH_COOKIE` environment variables (see below)  |
+| Command Code | `api.commandcode.ai`           | `~/.commandcode/auth.json` (or `COMMAND_CODE_API_KEY`)                                      |
+| Devin        | `server.codeium.com`           | `%APPDATA%\Devin\credentials.toml` (the CLI's API key)                                      |
+| Antigravity  | `cloudcode-pa.googleapis.com`  | `~/.gemini/antigravity-cli/antigravity-oauth-token` (read-only; unverified, see below)      |
 
-**Devin and Antigravity.** Devin's daily and weekly quota is read with the API key the Devin CLI keeps in `credentials.toml`; the key is only ever sent to `server.codeium.com`, whatever `api_server_url` says in that file. Antigravity's limits come from Google's private `retrieveUserQuota` method with the access token of the Antigravity CLI login. That method is undocumented, and this provider was written from community notes and has not been run against a signed-in account yet: if its card says the response changed, or shows nothing, please open an issue.
+Settings (thresholds, order, language, …) are stored in your user config directory as `settings.json` and contain no credentials.
 
-**OpenCode Go setup.** The OpenCode console has no API-key access to usage, and the `opencode` CLI does not store a console login, so Tokenza never touches your browser's cookies. (It only checks that `~/.local/share/opencode/auth.json` has an `opencode-go` entry, to tell "installed but not connected" from "not installed"; the key is not used.) Instead, open the OpenCode card in **Settings → Providers** and enter the workspace ID (the `wrk_…` part of `opencode.ai/workspace/wrk_…/go`) and the value of the `__Host-console_session` cookie, copied from your browser's developer tools. The `OPENCODE_GO_WORKSPACE_ID` and `OPENCODE_GO_AUTH_COOKIE` environment variables work too. The cookie expires eventually; replace it when the card asks you to sign in again.
+The last fetched limits (percentages, reset times, account label) are cached next to it as `snapshots.json`, so they stay visible when a check fails; this file contains no credentials either.
 
-### Keys you enter yourself
+<details>
+<summary><b>Devin and Antigravity</b></summary>
+
+<br>
+
+Devin's daily and weekly quota is read with the API key the Devin CLI keeps in `credentials.toml`; the key is only ever sent to `server.codeium.com`, whatever `api_server_url` says in that file. Antigravity's limits come from Google's private `retrieveUserQuota` method with the access token of the Antigravity CLI login. That method is undocumented, and this provider was written from community notes and has not been run against a signed-in account yet: if its card says the response changed, or shows nothing, please open an issue.
+
+</details>
+
+<details>
+<summary><b>OpenCode Go setup</b></summary>
+
+<br>
+
+The OpenCode console has no API-key access to usage, and the `opencode` CLI does not store a console login, so Tokenza never touches your browser's cookies. (It only checks that `~/.local/share/opencode/auth.json` has an `opencode-go` entry, to tell "installed but not connected" from "not installed"; the key is not used.) Instead, open the OpenCode card in **Settings → Providers** and enter the workspace ID (the `wrk_…` part of `opencode.ai/workspace/wrk_…/go`) and the value of the `__Host-console_session` cookie, copied from your browser's developer tools. The `OPENCODE_GO_WORKSPACE_ID` and `OPENCODE_GO_AUTH_COOKIE` environment variables work too. The cookie expires eventually; replace it when the card asks you to sign in again.
+
+</details>
+
+<details>
+<summary><b>Keys you enter yourself</b></summary>
+
+<br>
 
 Some providers need a key that no agent stores locally, and you can also add services Tokenza does not know (**Settings → Providers → Add provider**: a name, an HTTPS URL, how to authenticate, and the JSON paths of the numbers to show).
 
@@ -52,17 +136,19 @@ Some providers need a key that no agent stores locally, and you can also add ser
 - Tokenza reads it into memory only while building a request, like the logins it reads from the agents.
 - A custom provider only ever talks to the single HTTPS URL you entered, sends the token only there, and does not follow redirects. Custom providers add no domain to the list above; the one you configure is the only one contacted. The form's quick-fill buttons (OpenRouter, Synthetic) only pre-fill that URL and the JSON paths; nothing is contacted until you save the provider or press **Test**, which sends the one request to the URL in the form and stores nothing.
 
-Settings (thresholds, order, language, …) are stored in your user config directory as `settings.json` and contain no credentials.
+</details>
 
-The last fetched limits (percentages, reset times, account label) are cached next to it as `snapshots.json`, so they stay visible when a check fails; this file contains no credentials either.
-
-### Unofficial endpoints
-
-These providers do not publish a documented API for subscription usage. Tokenza uses the same endpoints that the agents' own usage views use. They can change or disappear without notice, and providers could restrict third-party use of them. If a response format changes, Tokenza shows an "Endpoint changed" card instead of wrong numbers, and the provider module needs an update. Use Tokenza at your own discretion.
+> [!WARNING]
+> **Unofficial endpoints.** These providers do not publish a documented API for subscription usage. Tokenza uses the same endpoints that the agents' own usage views use. They can change or disappear without notice, and providers could restrict third-party use of them. If a response format changes, Tokenza shows an "Endpoint changed" card instead of wrong numbers, and the provider module needs an update. Use Tokenza at your own discretion.
 
 ## Install
 
-Download the latest `Tokenza_*_x64-setup.exe` from the [Releases](../../releases) page and run it. The installer is not code-signed yet, so Windows SmartScreen may warn about an unknown publisher: choose **More info → Run anyway**. You can also build from source (see below).
+Download the latest `Tokenza_*_x64-setup.exe` from the [Releases](../../releases) page and run it.
+
+> [!TIP]
+> The installer is not code-signed yet, so Windows SmartScreen may warn about an unknown publisher: choose **More info → Run anyway**.
+
+You can also build from source (see below). Launching the executable a second time opens the flyout of the already running instance.
 
 ## Build from source
 
@@ -75,14 +161,12 @@ Requirements:
 
 ```bash
 git clone https://github.com/NemoKing1210/Tokenza.git
-cd tokenza/apps/tokenza
+cd Tokenza/apps/tokenza
 npm install
 npx tauri dev                          # run with hot reload (Vite on port 1421)
 npx tauri build                        # release build with an NSIS installer
 npx tauri build --debug --no-bundle    # quick debug build: target/debug/tokenza-app.exe
 ```
-
-Launching the executable a second time opens the flyout of the already running instance.
 
 ### Command-line prototype
 
@@ -101,7 +185,7 @@ crates/tokenza-cli    Command-line front end for the core library
 apps/tokenza          Desktop app
   src-tauri           Tauri 2 backend: tray, scheduler, notifications, settings (Rust)
   src                 React + TypeScript UI (Fluent UI, Zustand)
-docs/                 Architecture notes
+docs/                 Architecture notes and README screenshots
 ```
 
 See [docs/architecture.md](docs/architecture.md) for how the pieces fit together.
@@ -119,7 +203,7 @@ npm run build      # type-check + production build
 npm test
 ```
 
-Running `npm run dev` in `apps/tokenza` serves the UI in a normal browser with demo data, which is handy for UI work without the Tauri shell.
+Running `npm run dev` in `apps/tokenza` serves the UI in a normal browser with demo data, which is handy for UI work without the Tauri shell. The screenshots above were taken that way.
 
 ## Contributing
 
