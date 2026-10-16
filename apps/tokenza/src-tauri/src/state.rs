@@ -108,6 +108,8 @@ pub struct Inner {
     pub last_hidden: Option<Instant>,
     /// Last tuning file content, to write only on change.
     pub tuning_saved: String,
+    /// Same for the snapshot cache.
+    pub snapshots_saved: String,
     /// `provider/field` of every stored credential, so the UI state needs no credential-store reads.
     pub secrets: HashSet<String>,
 }
@@ -131,6 +133,17 @@ fn tuning_path(settings_path: &std::path::Path) -> PathBuf {
     settings_path.with_file_name("tuning.json")
 }
 
+fn snapshots_path(settings_path: &std::path::Path) -> PathBuf {
+    settings_path.with_file_name("snapshots.json")
+}
+
+/// A cached snapshot is only worth showing for windows whose cycle has not ended yet: after a
+/// reset the old percentage is wrong, not just old. Windows without a reset time are kept.
+fn still_valid(mut snap: UsageSnapshot, now: DateTime<Utc>) -> Option<UsageSnapshot> {
+    snap.windows.retain(|w| w.resets_at.is_none_or(|t| t > now));
+    (!snap.windows.is_empty()).then_some(snap)
+}
+
 impl AppState {
     pub fn new(settings_path: PathBuf) -> Self {
         let settings = Settings::load(&settings_path);
@@ -139,6 +152,14 @@ impl AppState {
                 .ok()
                 .and_then(|t| serde_json::from_str(&t).ok())
                 .unwrap_or_default();
+        // The last good values from the previous run, so a failed first poll (rate limit,
+        // no network) still leaves something to show. A damaged file is simply ignored.
+        let mut cached: HashMap<String, UsageSnapshot> =
+            std::fs::read_to_string(snapshots_path(&settings_path))
+                .ok()
+                .and_then(|t| serde_json::from_str(&t).ok())
+                .unwrap_or_default();
+        let now = Utc::now();
         let providers = settings
             .providers
             .iter()
@@ -147,6 +168,7 @@ impl AppState {
                 if let Some(l) = learned.get(&p.id) {
                     st.tuner = Tuner::from_learned(*l);
                 }
+                st.snapshot = cached.remove(&p.id).and_then(|s| still_valid(s, now));
                 st
             })
             .collect();
@@ -158,6 +180,7 @@ impl AppState {
                 flyout_anchor: None,
                 last_hidden: None,
                 tuning_saved: String::new(),
+                snapshots_saved: String::new(),
                 secrets: HashSet::new(),
             }),
             settings_path,
@@ -229,6 +252,22 @@ impl AppState {
         if text != g.tuning_saved {
             let _ = std::fs::write(tuning_path(&self.settings_path), &text);
             g.tuning_saved = text;
+        }
+    }
+
+    /// Writes the last good snapshots next to the settings; skipped when nothing changed.
+    /// They hold limits and an account label, never credentials.
+    pub fn save_snapshots(&self) {
+        let mut g = self.lock();
+        let map: HashMap<&str, &UsageSnapshot> = g
+            .providers
+            .iter()
+            .filter_map(|p| p.snapshot.as_ref().map(|s| (p.id.as_str(), s)))
+            .collect();
+        let text = serde_json::to_string(&map).unwrap_or_default();
+        if text != g.snapshots_saved {
+            let _ = std::fs::write(snapshots_path(&self.settings_path), &text);
+            g.snapshots_saved = text;
         }
     }
 
@@ -405,6 +444,39 @@ mod tests {
             unique_id("Acme", &taken(&["custom-acme", "custom-acme-2"])),
             "custom-acme-3"
         );
+    }
+
+    #[test]
+    fn cached_snapshot_drops_windows_that_already_reset() {
+        use tokenza_core::{UsageWindow, WindowKind};
+        let now = Utc::now();
+        let window = |label: &str, resets_at| UsageWindow {
+            kind: WindowKind::Weekly,
+            label: label.into(),
+            used_pct: Some(40.0),
+            resets_at,
+            detail: None,
+        };
+        let snap = |windows| UsageSnapshot {
+            provider: "codex".into(),
+            account: "plus".into(),
+            windows,
+            subscription_ends_at: None,
+            fetched_at: now,
+        };
+        let h = chrono::Duration::hours(1);
+        let kept = still_valid(
+            snap(vec![
+                window("old", Some(now - h)),
+                window("live", Some(now + h)),
+                window("open", None),
+            ]),
+            now,
+        )
+        .unwrap();
+        let labels: Vec<_> = kept.windows.iter().map(|w| w.label.as_str()).collect();
+        assert_eq!(labels, ["live", "open"]);
+        assert!(still_valid(snap(vec![window("old", Some(now - h))]), now).is_none());
     }
 
     #[test]

@@ -150,6 +150,10 @@ export function ProviderCard({ p, lang, now, index = 0, pref }: { p: ProviderSta
         </div>
       )}
 
+      {p.snapshot && p.status === "error" && (
+        <div className="card-sub">{t(lang, "staleSince", { x: formatDuration(now - new Date(p.snapshot.fetched_at).getTime(), lang) })}</div>
+      )}
+
       {p.snapshot?.subscription_ends_at && p.status !== "not_found" && (
         <div className="card-sub">{formatSubscriptionEnd(p.snapshot.subscription_ends_at, now, lang)}</div>
       )}
@@ -253,6 +257,9 @@ export function CompactCard({ p, lang, now, index = 0, pref }: { p: ProviderStat
             <CompactRow key={`${w.kind}-${w.label}-${i}`} w={w} lang={lang} now={now} />
           ))}
         </div>
+      )}
+      {p.snapshot && p.status === "error" && (
+        <div className="ccard-sub">{t(lang, "staleSince", { x: formatDuration(now - new Date(p.snapshot.fetched_at).getTime(), lang) })}</div>
       )}
       {p.snapshot?.subscription_ends_at && p.status !== "not_found" && (
         <div className="ccard-sub">{formatSubscriptionEnd(p.snapshot.subscription_ends_at, now, lang)}</div>

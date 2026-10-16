@@ -36,7 +36,8 @@ pub fn evaluate(g: &mut Inner) -> Vec<Toast> {
     for p in g
         .providers
         .iter()
-        .filter(|p| p.enabled && g.settings.notifies(&p.id))
+        // Cached values (restored from disk, or kept after a failed poll) are not news.
+        .filter(|p| p.enabled && p.status == "ok" && g.settings.notifies(&p.id))
     {
         let Some(snap) = &p.snapshot else { continue };
         let name = g.settings.display_name(&p.id);
@@ -143,6 +144,7 @@ mod tests {
 
     fn inner(pct: f32, resets: DateTime<Utc>, notified: HashMap<String, Notified>) -> Inner {
         let mut p = ProviderState::new("codex", true);
+        p.status = "ok";
         p.snapshot = Some(UsageSnapshot {
             provider: "codex".into(),
             account: "plus".into(),
@@ -165,6 +167,7 @@ mod tests {
             flyout_anchor: None,
             last_hidden: None,
             tuning_saved: String::new(),
+            snapshots_saved: String::new(),
             secrets: Default::default(),
         }
     }

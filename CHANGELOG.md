@@ -25,4 +25,5 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Cards show when the subscription ends or renews ("subscription until 1 Nov 2026") for Codex (from the login) and Command Code (billing period end). Claude Code, Cursor and OpenCode do not expose it locally, so they show no such line.
 - Devin provider: daily and weekly quota, plan name and pay-as-you-go balance, read with the API key of the Devin CLI (`%APPDATA%\Devin\credentials.toml`). New "Day" window kind.
 - Antigravity provider (experimental): model quota from the Antigravity CLI login, shown as the most-used model per window. Written from community documentation of a private endpoint and not yet verified against a signed-in account.
+- The last known limits survive a failed poll (rate limit, no connection) and an app restart: they are shown dimmed with "Last updated … ago" instead of an empty card. Windows whose cycle has already reset are dropped from the cache, and cached values never trigger notifications.
 - Open-source project files: license, contributing guide, code of conduct, security policy, CI.

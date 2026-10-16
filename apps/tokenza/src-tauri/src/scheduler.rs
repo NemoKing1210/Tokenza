@@ -186,6 +186,7 @@ async fn round(app: &AppHandle, providers: &[Arc<dyn Provider>], manual: bool) {
     }
 
     state.save_tuning();
+    state.save_snapshots();
     toasts.extend(notify::evaluate(&mut state.lock()));
     notify::show(app, toasts);
     publish(app);

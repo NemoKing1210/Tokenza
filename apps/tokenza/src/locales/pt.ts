@@ -20,6 +20,7 @@ export const pt: Dict = {
   rateTitle: "Solicitações demais",
   rateHint: "O provedor pediu para aguardar. Uma nova tentativa será feita automaticamente.",
   retry: "Tentar novamente",
+  staleSince: "Atualizado há {x}",
   pending: "Carregando dados…",
   empty: "Ative pelo menos um provedor nas configurações.",
   credits: "Saldo",

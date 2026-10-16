@@ -20,6 +20,7 @@ export const de: Dict = {
   rateTitle: "Zu viele Anfragen",
   rateHint: "Der Anbieter bittet um Wartezeit. Automatischer neuer Versuch folgt.",
   retry: "Erneut versuchen",
+  staleSince: "Zuletzt aktualisiert vor {x}",
   pending: "Daten werden geladen …",
   empty: "Aktiviere in den Einstellungen mindestens einen Anbieter.",
   credits: "Guthaben",

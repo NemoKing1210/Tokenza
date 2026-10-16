@@ -7,7 +7,7 @@ pub struct Account {
     pub label: String,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UsageSnapshot {
     pub provider: String,
     /// Email or plan, never a token.
@@ -28,7 +28,7 @@ pub enum WindowKind {
     Credits,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UsageWindow {
     pub kind: WindowKind,
     /// Human label, e.g. "Week · Opus".

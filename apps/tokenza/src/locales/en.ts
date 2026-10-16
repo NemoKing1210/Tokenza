@@ -18,6 +18,7 @@ export const en = {
   rateTitle: "Too many requests",
   rateHint: "The provider asked to slow down. Retrying automatically.",
   retry: "Retry",
+  staleSince: "Last updated {x} ago",
   pending: "Loading data…",
   empty: "Enable at least one provider in settings.",
   credits: "Balance",

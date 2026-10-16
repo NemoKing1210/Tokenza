@@ -54,6 +54,8 @@ Some providers need a key that no agent stores locally, and you can also add ser
 
 Settings (thresholds, order, language, …) are stored in your user config directory as `settings.json` and contain no credentials.
 
+The last fetched limits (percentages, reset times, account label) are cached next to it as `snapshots.json`, so they stay visible when a check fails; this file contains no credentials either.
+
 ### Unofficial endpoints
 
 These providers do not publish a documented API for subscription usage. Tokenza uses the same endpoints that the agents' own usage views use. They can change or disappear without notice, and providers could restrict third-party use of them. If a response format changes, Tokenza shows an "Endpoint changed" card instead of wrong numbers, and the provider module needs an update. Use Tokenza at your own discretion.

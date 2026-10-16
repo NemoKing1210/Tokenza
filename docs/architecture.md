@@ -42,7 +42,7 @@ Everything that knows about a specific AI agent lives here, and nothing here kno
 | `main.rs`     | Tauri setup, IPC commands, single-instance handling, autostart, window events    |
 | `scheduler.rs`| Background loop; polls each provider on its own schedule and publishes results   |
 | `adaptive.rs` | Smart polling: backs off after rate-limit answers, speeds up near a limit, slows when idle |
-| `state.rs`    | Shared application state and the DTO sent to the UI                               |
+| `state.rs`    | Shared application state and the DTO sent to the UI; keeps the last good snapshots in `snapshots.json` (limits and account label, no credentials) |
 | `settings.rs` | User settings, persisted as `settings.json` in the app config directory           |
 | `notify.rs`   | Threshold and "limit available again" toasts, deduplicated per reset cycle        |
 | `tray.rs`     | Tray icon, menu and the flyout window                                             |

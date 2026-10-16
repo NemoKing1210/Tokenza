@@ -20,6 +20,7 @@ export const zh: Dict = {
   rateTitle: "请求过于频繁",
   rateHint: "提供方要求稍后再试，将自动重试。",
   retry: "重试",
+  staleSince: "{x}前更新",
   pending: "正在加载数据…",
   empty: "请在设置中至少启用一个提供方。",
   credits: "余额",
