@@ -18,7 +18,7 @@ For anything larger than a small fix, please open an issue first so we can agree
 Requirements: Rust (stable), Node.js 20.19 or newer, and on Windows the MSVC C++ build tools plus the WebView2 runtime. See the [README](README.md#build-from-source) for details.
 
 ```bash
-git clone https://github.com/OWNER/tokenza.git
+git clone https://github.com/NemoKing1210/Tokenza.git
 cd tokenza/apps/tokenza
 npm install
 npx tauri dev

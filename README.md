@@ -1,6 +1,6 @@
 # Tokenza
 
-[![CI](https://github.com/OWNER/tokenza/actions/workflows/ci.yml/badge.svg)](https://github.com/OWNER/tokenza/actions/workflows/ci.yml)
+[![CI](https://github.com/NemoKing1210/Tokenza/actions/workflows/ci.yml/badge.svg)](https://github.com/NemoKing1210/Tokenza/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 A lightweight Windows tray app that shows how much of your AI coding agents' usage limits you have left, and when they reset.
@@ -74,7 +74,7 @@ Requirements:
 - [Microsoft C++ Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/)
 
 ```bash
-git clone https://github.com/OWNER/tokenza.git
+git clone https://github.com/NemoKing1210/Tokenza.git
 cd tokenza/apps/tokenza
 npm install
 npx tauri dev                          # run with hot reload (Vite on port 1421)
