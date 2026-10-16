@@ -244,6 +244,38 @@ fn quit_app(app: AppHandle) {
     app.exit(0);
 }
 
+/// Links the About page may open. Anything else is refused, so the web view cannot be used to
+/// launch arbitrary addresses.
+const ALLOWED_LINK_PREFIX: &str = "https://github.com/NemoKing1210/";
+
+#[derive(serde::Serialize)]
+struct AboutInfo {
+    version: &'static str,
+    license: &'static str,
+}
+
+#[tauri::command]
+fn about_info() -> AboutInfo {
+    AboutInfo {
+        version: env!("CARGO_PKG_VERSION"),
+        license: env!("CARGO_PKG_LICENSE"),
+    }
+}
+
+#[tauri::command]
+fn open_url(url: String) -> Result<(), String> {
+    if !url.starts_with(ALLOWED_LINK_PREFIX) || url.chars().any(|c| c.is_whitespace() || c == '"') {
+        return Err("link not allowed".into());
+    }
+    #[cfg(windows)]
+    let mut cmd = std::process::Command::new("explorer.exe");
+    #[cfg(target_os = "macos")]
+    let mut cmd = std::process::Command::new("open");
+    #[cfg(all(not(windows), not(target_os = "macos")))]
+    let mut cmd = std::process::Command::new("xdg-open");
+    cmd.arg(&url).spawn().map(|_| ()).map_err(|e| e.to_string())
+}
+
 fn sync_autostart(app: &AppHandle, want: bool) {
     let manager = app.autolaunch();
     let have = manager.is_enabled().unwrap_or(false);
@@ -294,7 +326,9 @@ fn main() {
             set_flyout_height,
             open_settings,
             hide_flyout,
-            quit_app
+            quit_app,
+            about_info,
+            open_url
         ])
         .setup(|app| {
             let path = app.path().app_config_dir()?.join("settings.json");

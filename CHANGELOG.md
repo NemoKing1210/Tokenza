@@ -26,4 +26,5 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Devin provider: daily and weekly quota, plan name and pay-as-you-go balance, read with the API key of the Devin CLI (`%APPDATA%\Devin\credentials.toml`). New "Day" window kind.
 - Antigravity provider (experimental): model quota from the Antigravity CLI login, shown as the most-used model per window. Written from community documentation of a private endpoint and not yet verified against a signed-in account.
 - The last known limits survive a failed poll (rate limit, no connection) and an app restart: they are shown dimmed with "Last updated … ago" instead of an empty card. Windows whose cycle has already reset are dropped from the cache, and cached values never trigger notifications.
+- **Settings → About** shows the app version, author, repository, license and changelog, and links to GitHub issues. Links open in the default browser and only for the project's GitHub address.
 - Open-source project files: license, contributing guide, code of conduct, security policy, CI.

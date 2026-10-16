@@ -5,6 +5,7 @@ import { LANGS, t, type Key, type LangSetting } from "./i18n";
 import type { Lang } from "./format";
 import type { Settings } from "./types";
 import { Row, Segmented } from "./controls";
+import AboutPane from "./AboutPane";
 import UpdatePane from "./UpdatePane";
 import ProvidersPane from "./ProvidersPane";
 import TitleBar from "./TitleBar";
@@ -231,14 +232,7 @@ export default function SettingsView() {
         <HotkeyRow lang={lang} s={s} />
       </>
     ),
-    about: (
-      <>
-        <p className="lead">{t(lang, "aboutText")}</p>
-        <button className="btn" onClick={quit}>
-          {t(lang, "quit")}
-        </button>
-      </>
-    ),
+    about: <AboutPane lang={lang} quit={quit} />,
   };
 
   return (
