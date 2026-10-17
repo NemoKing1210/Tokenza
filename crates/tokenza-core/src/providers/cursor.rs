@@ -9,7 +9,7 @@ use chrono::Utc;
 use rusqlite::{Connection, OpenFlags};
 use serde_json::Value;
 
-use super::{http, rfc3339};
+use super::{body_json, http, rfc3339};
 use crate::error::check_response;
 use crate::{Account, Provider, ProviderError, UsageSnapshot, UsageWindow, WindowKind};
 
@@ -86,7 +86,7 @@ impl Provider for Cursor {
             .send()
             .await?;
         check_response(&resp)?;
-        let body: Value = resp.json().await?;
+        let body = body_json(resp).await?;
 
         let windows = parse(&body);
         if windows.is_empty() {

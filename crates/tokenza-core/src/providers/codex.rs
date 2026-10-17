@@ -7,7 +7,7 @@ use base64::Engine;
 use chrono::{DateTime, Utc};
 use serde_json::Value;
 
-use super::{home, http, read_json};
+use super::{body_json, home, http, read_json};
 use crate::error::check_response;
 use crate::{Account, Provider, ProviderError, UsageSnapshot, UsageWindow, WindowKind};
 
@@ -50,7 +50,7 @@ impl Provider for Codex {
         }
         let resp = req.send().await?;
         check_response(&resp)?;
-        let body: Value = resp.json().await?;
+        let body = body_json(resp).await?;
 
         let windows = parse(&body);
         if windows.is_empty() {
@@ -113,8 +113,9 @@ fn parse(body: &Value) -> Vec<UsageWindow> {
             .and_then(Value::as_i64)
             .and_then(|ts| DateTime::from_timestamp(ts, 0))
             .or_else(|| {
+                // Checked: an absurd value from the server must not panic the poller.
                 let after = w.get("reset_after_seconds").and_then(Value::as_i64)?;
-                Some(Utc::now() + chrono::Duration::seconds(after))
+                Utc::now().checked_add_signed(chrono::Duration::try_seconds(after)?)
             });
         out.push(UsageWindow {
             kind,
@@ -183,6 +184,16 @@ mod tests {
             subscription_end(&serde_json::json!({"id_token": "garbage"})),
             None
         );
+    }
+
+    #[test]
+    fn out_of_range_reset_is_dropped_not_a_panic() {
+        let body = serde_json::json!({"rate_limit": {
+            "primary_window": {"used_percent": 1, "limit_window_seconds": 18000, "reset_after_seconds": i64::MAX}
+        }});
+        let w = parse(&body);
+        assert_eq!(w.len(), 1);
+        assert!(w[0].resets_at.is_none());
     }
 
     #[test]

@@ -8,6 +8,8 @@ pub mod devin;
 pub mod opencode;
 
 use std::path::PathBuf;
+use std::sync::OnceLock;
+use std::time::Duration;
 
 use chrono::{DateTime, Utc};
 use serde_json::Value;
@@ -20,20 +22,64 @@ pub(crate) fn home() -> Option<PathBuf> {
         .map(PathBuf::from)
 }
 
-pub(crate) fn http() -> Result<reqwest::Client, ProviderError> {
-    Ok(reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(15))
+/// Largest response body any provider reads; usage answers are a few kilobytes.
+const MAX_BODY: usize = 1 << 20;
+
+fn client_builder() -> reqwest::ClientBuilder {
+    reqwest::Client::builder()
+        .timeout(Duration::from_secs(15))
+        .connect_timeout(Duration::from_secs(10))
+        // Polls are minutes apart, so a kept-alive socket would mostly sit idle.
+        .pool_idle_timeout(Duration::from_secs(30))
         .user_agent("tokenza/0.1")
-        .build()?)
+}
+
+/// One client for the whole process: building one loads the system root certificates, which is
+/// too costly to repeat on every poll. A failed build is retried on the next call.
+fn shared(
+    cell: &'static OnceLock<reqwest::Client>,
+    build: fn() -> reqwest::ClientBuilder,
+) -> Result<reqwest::Client, ProviderError> {
+    if let Some(c) = cell.get() {
+        return Ok(c.clone());
+    }
+    let c = build().build()?;
+    Ok(cell.get_or_init(|| c).clone())
+}
+
+pub(crate) fn http() -> Result<reqwest::Client, ProviderError> {
+    static CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
+    shared(&CLIENT, client_builder)
 }
 
 /// Same client, but a redirect is an error: user-defined endpoints must not forward our credentials elsewhere.
 pub(crate) fn http_no_redirect() -> Result<reqwest::Client, ProviderError> {
-    Ok(reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(15))
-        .user_agent("tokenza/0.1")
-        .redirect(reqwest::redirect::Policy::none())
-        .build()?)
+    static CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
+    shared(&CLIENT, || {
+        client_builder().redirect(reqwest::redirect::Policy::none())
+    })
+}
+
+/// The response body, refused once it grows past [`MAX_BODY`] instead of being buffered whole.
+async fn body_bytes(mut resp: reqwest::Response) -> Result<Vec<u8>, ProviderError> {
+    let too_large = || ProviderError::SchemaChanged("response is too large".into());
+    if resp.content_length().is_some_and(|n| n > MAX_BODY as u64) {
+        return Err(too_large());
+    }
+    let mut buf = Vec::new();
+    while let Some(chunk) = resp.chunk().await? {
+        if buf.len() + chunk.len() > MAX_BODY {
+            return Err(too_large());
+        }
+        buf.extend_from_slice(&chunk);
+    }
+    Ok(buf)
+}
+
+/// The response body as JSON; a body that is not JSON means the endpoint changed, not that we are offline.
+pub(crate) async fn body_json(resp: reqwest::Response) -> Result<Value, ProviderError> {
+    serde_json::from_slice(&body_bytes(resp).await?)
+        .map_err(|_| ProviderError::SchemaChanged("response is not JSON".into()))
 }
 
 /// A JSON number, or a string holding one.

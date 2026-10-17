@@ -1,4 +1,4 @@
-import { useState, type CSSProperties, type KeyboardEvent, type ReactNode } from "react";
+import { useState, useSyncExternalStore, type CSSProperties, type KeyboardEvent, type ReactNode } from "react";
 import { FluentProvider, Select, Switch, webDarkTheme, webLightTheme } from "@fluentui/react-components";
 import { selectLang, useStore } from "./store";
 import { LANGS, t, type Key, type LangSetting } from "./i18n";
@@ -49,6 +49,15 @@ function TestNotification({ lang }: { lang: Lang }) {
     </>
   );
 }
+
+const darkQuery = matchMedia("(prefers-color-scheme: dark)");
+const onSchemeChange = (cb: () => void) => {
+  darkQuery.addEventListener("change", cb);
+  return () => darkQuery.removeEventListener("change", cb);
+};
+
+/** The system's dark mode, kept current while the window is open (the CSS follows it on its own). */
+const useSystemDark = () => useSyncExternalStore(onSchemeChange, () => darkQuery.matches);
 
 const DEFAULT_HOTKEY = "Ctrl+Alt+T";
 const MODIFIER_KEYS = ["Control", "Alt", "Shift", "Meta", "AltGraph"];
@@ -137,10 +146,11 @@ export default function SettingsView() {
   const data = useStore((s) => s.data);
   const { saveSettings, quit } = useStore.getState();
   const [section, setSection] = useState<Section>("providers");
+  const systemDark = useSystemDark();
   if (!data) return null;
   const { settings: s } = data;
   const lang = selectLang(data);
-  const isDark = s.theme === "dark" || (s.theme === "system" && matchMedia("(prefers-color-scheme: dark)").matches);
+  const isDark = s.theme === "dark" || (s.theme === "system" && systemDark);
 
   const pct = (key: "warn_pct" | "crit_pct", options: number[]) => (
     <Select

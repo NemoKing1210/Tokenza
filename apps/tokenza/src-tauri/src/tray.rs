@@ -19,6 +19,10 @@ use crate::tray_icon::{self, Levels};
 const TRAY_ID: &str = "main";
 /// Providers that currently have an icon of their own, so one that was switched off can be removed.
 static PROVIDER_ICONS: Mutex<Vec<String>> = Mutex::new(Vec::new());
+/// Pixels and tooltip each tray icon shows now, so an unchanged one is not handed to Windows again.
+static SHOWN: Mutex<Vec<(String, Vec<u8>, String)>> = Mutex::new(Vec::new());
+/// Language the tray menus were last built in; rebuilding them is only needed when it changes.
+static MENU_LANG: Mutex<Option<&'static str>> = Mutex::new(None);
 pub const FLYOUT_WIDTH: f64 = 360.0;
 /// A tray click right after the flyout lost focus is the click that closed it, not a new open.
 const REOPEN_GUARD: Duration = Duration::from_millis(350);
@@ -47,6 +51,19 @@ fn provider_icon_id(provider: &str) -> String {
 
 /// Re-applies the language to everything the backend owns: tray menus and the settings window title.
 pub fn apply_language(app: &AppHandle) {
+    let lang = app.state::<AppState>().lock().settings.resolved_lang();
+    if let Some(w) = app.get_webview_window("settings") {
+        let _ = w.set_title(i18n::strings(lang).settings_title);
+    }
+    // Called on every settings save; the menus only need rebuilding when the language changed.
+    if MENU_LANG
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .replace(lang)
+        == Some(lang)
+    {
+        return;
+    }
     let mut ids = vec![TRAY_ID.to_string()];
     ids.extend(
         PROVIDER_ICONS
@@ -59,10 +76,6 @@ pub fn apply_language(app: &AppHandle) {
         if let (Some(tray), Ok(menu)) = (app.tray_by_id(&id), build_menu(app)) {
             let _ = tray.set_menu(Some(menu));
         }
-    }
-    let lang = app.state::<AppState>().lock().settings.resolved_lang();
-    if let Some(w) = app.get_webview_window("settings") {
-        let _ = w.set_title(i18n::strings(lang).settings_title);
     }
 }
 
@@ -115,7 +128,8 @@ fn build_icon(
 }
 
 pub fn setup(app: &AppHandle) -> tauri::Result<()> {
-    build_icon(app, TRAY_ID, render(app), "Tokenza")?;
+    let icon = Image::new_owned(render(app), tray_icon::SIZE, tray_icon::SIZE);
+    build_icon(app, TRAY_ID, icon, "Tokenza")?;
     sync_provider_icons(app);
     Ok(())
 }
@@ -149,13 +163,9 @@ fn levels(app: &AppHandle) -> Levels {
     tray_levels(&g.settings, &g.providers)
 }
 
-fn render(app: &AppHandle) -> Image<'static> {
+fn render(app: &AppHandle) -> Vec<u8> {
     let style = app.state::<AppState>().lock().settings.tray_style.clone();
-    Image::new_owned(
-        tray_icon::render(&style, levels(app)),
-        tray_icon::SIZE,
-        tray_icon::SIZE,
-    )
+    tray_icon::render(&style, levels(app))
 }
 
 /// Windows caps tooltips at 127 characters, so only short per-provider numbers fit.
@@ -191,12 +201,41 @@ fn tooltip(app: &AppHandle) -> String {
     text.chars().take(120).collect()
 }
 
+/// Redraws every tray icon from the current state.
+///
+/// A tray call made off the main thread blocks until the main thread has run it, and sync commands
+/// run on the main thread and take the same locks. Doing all of it on the main thread means the
+/// poller never waits on the main thread while holding a lock the main thread needs.
 pub fn refresh(app: &AppHandle) {
-    if let Some(tray) = app.tray_by_id(TRAY_ID) {
-        let _ = tray.set_icon(Some(render(app)));
-        let _ = tray.set_tooltip(Some(tooltip(app)));
+    let handle = app.clone();
+    let _ = app.run_on_main_thread(move || {
+        if let Some(tray) = handle.tray_by_id(TRAY_ID) {
+            update_icon(&tray, TRAY_ID, render(&handle), tooltip(&handle));
+        }
+        sync_provider_icons(&handle);
+    });
+}
+
+/// Hands the icon and tooltip to the tray only when they differ from what it already shows.
+fn update_icon(tray: &TrayIcon, id: &str, rgba: Vec<u8>, tip: String) {
+    let mut shown = SHOWN.lock().unwrap_or_else(PoisonError::into_inner);
+    let i = match shown.iter().position(|(i, ..)| i == id) {
+        Some(i) => i,
+        None => {
+            shown.push((id.to_string(), Vec::new(), String::new()));
+            shown.len() - 1
+        }
+    };
+    let slot = &mut shown[i];
+    if slot.1 != rgba {
+        let image = Image::new_owned(rgba.clone(), tray_icon::SIZE, tray_icon::SIZE);
+        if tray.set_icon(Some(image)).is_ok() {
+            slot.1 = rgba;
+        }
     }
-    sync_provider_icons(app);
+    if slot.2 != tip && tray.set_tooltip(Some(&tip)).is_ok() {
+        slot.2 = tip;
+    }
 }
 
 /// One provider's tooltip: its name and every visible limit, within Windows' length cap.
@@ -225,7 +264,7 @@ fn sync_provider_icons(app: &AppHandle) {
         .get_webview_window("flyout")
         .and_then(|w| w.theme().ok())
         .is_none_or(|t| t != Theme::Light);
-    let wanted: Vec<(String, Image<'static>, String)> = {
+    let wanted: Vec<(String, Vec<u8>, String)> = {
         let state = app.state::<AppState>();
         let g = state.lock();
         let s = &g.settings;
@@ -239,8 +278,7 @@ fn sync_provider_icons(app: &AppHandle) {
                     Some(logo) => tray_icon::render_provider(&s.tray_style, levels, logo, dark),
                     None => tray_icon::render(&s.tray_style, levels),
                 };
-                let image = Image::new_owned(rgba, tray_icon::SIZE, tray_icon::SIZE);
-                (p.id.clone(), image, provider_tooltip(s, p))
+                (p.id.clone(), rgba, provider_tooltip(s, p))
             })
             .collect()
     };
@@ -248,19 +286,29 @@ fn sync_provider_icons(app: &AppHandle) {
     let mut live = PROVIDER_ICONS
         .lock()
         .unwrap_or_else(PoisonError::into_inner);
+    let mut shown = SHOWN.lock().unwrap_or_else(PoisonError::into_inner);
     live.retain(|id| {
         let keep = wanted.iter().any(|(w, ..)| w == id);
         if !keep {
-            app.remove_tray_by_id(&provider_icon_id(id));
+            let tray_id = provider_icon_id(id);
+            app.remove_tray_by_id(&tray_id);
+            shown.retain(|(i, ..)| *i != tray_id);
         }
         keep
     });
-    for (id, image, tip) in wanted {
+    drop(shown);
+    for (id, rgba, tip) in wanted {
         let tray_id = provider_icon_id(&id);
         if let Some(tray) = app.tray_by_id(&tray_id) {
-            let _ = tray.set_icon(Some(image));
-            let _ = tray.set_tooltip(Some(tip));
-        } else if build_icon(app, &tray_id, image, &tip).is_ok() {
+            update_icon(&tray, &tray_id, rgba, tip);
+            continue;
+        }
+        let image = Image::new_owned(rgba.clone(), tray_icon::SIZE, tray_icon::SIZE);
+        if build_icon(app, &tray_id, image, &tip).is_ok() {
+            SHOWN
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .push((tray_id, rgba, tip));
             live.push(id);
         }
     }

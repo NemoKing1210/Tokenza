@@ -6,7 +6,7 @@ use async_trait::async_trait;
 use chrono::Utc;
 use serde_json::Value;
 
-use super::{home, http, read_json, rfc3339};
+use super::{body_json, home, http, read_json, rfc3339};
 use crate::error::check_response;
 use crate::{Account, Provider, ProviderError, UsageSnapshot, UsageWindow, WindowKind};
 
@@ -75,7 +75,7 @@ impl Provider for Claude {
             .send()
             .await?;
         check_response(&resp)?;
-        let body: Value = resp.json().await?;
+        let body = body_json(resp).await?;
 
         let windows = parse(&body);
         if windows.is_empty() {

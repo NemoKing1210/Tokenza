@@ -4,6 +4,7 @@ import { t, type Key } from "./i18n";
 import { ProviderLogo } from "./Logo";
 import { secretFieldsFor } from "./Connect";
 import { EnterContext, useCountUp } from "./motion";
+import { useNow } from "./clock";
 import {
   providerName,
   formatDuration,
@@ -32,15 +33,6 @@ const cardStyle = (index: number, id: string): CSSProperties =>
 const SHRINK_DELAY_MS = 300;
 /** Longest entrance (last card's delay plus its duration); after it, remounts do not replay it. */
 const ENTER_MS = 1100;
-
-function useNow(intervalMs = 10_000) {
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), intervalMs);
-    return () => clearInterval(id);
-  }, [intervalMs]);
-  return now;
-}
 
 export function UsageRow({ w, lang, now }: { w: UsageWindow; lang: Lang; now: number }) {
   const label = windowLabel(w, lang);
@@ -285,7 +277,8 @@ export default function Flyout() {
   const flyout = useStore((s) => s.flyout);
   const { refresh, openSettings, hideFlyout, setFlyoutHeight, saveSettings } = useStore.getState();
   const rootRef = useRef<HTMLDivElement>(null);
-  const now = useNow();
+  // Countdowns only matter while the flyout is on screen.
+  const now = useNow(10_000, flyout.phase === "shown");
 
   // The entrance plays once per show. Derived (not an effect) so the very first frame already has it.
   const [settledEnter, setSettledEnter] = useState(0);
@@ -304,6 +297,7 @@ export default function Flyout() {
     let timer: ReturnType<typeof setTimeout> | undefined;
     const report = () => {
       const h = Math.ceil(el.getBoundingClientRect().height);
+      if (h === last) return;
       clearTimeout(timer);
       // Growing is applied at once; shrinking waits for the morph so the window does not clip it.
       if (h < last) timer = setTimeout(() => setFlyoutHeight(h), SHRINK_DELAY_MS);

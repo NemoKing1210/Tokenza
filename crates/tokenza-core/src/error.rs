@@ -44,6 +44,10 @@ impl Serialize for ProviderError {
 
 impl From<reqwest::Error> for ProviderError {
     fn from(e: reqwest::Error) -> Self {
+        // A body that does not decode is a changed endpoint; retrying it like a dropped link would not help.
+        if e.is_decode() {
+            return Self::SchemaChanged("unreadable response body".into());
+        }
         // `without_url` keeps query strings out of messages; the source chain carries the real cause.
         let e = e.without_url();
         let mut msg = e.to_string();

@@ -8,7 +8,7 @@ use async_trait::async_trait;
 use chrono::Utc;
 use serde_json::{json, Value};
 
-use super::{http_no_redirect, number, timestamp};
+use super::{body_json, http_no_redirect, number, timestamp};
 use crate::error::check_response;
 use crate::{Account, Provider, ProviderError, UsageSnapshot, UsageWindow, WindowKind};
 
@@ -91,7 +91,7 @@ impl Provider for Devin {
             .send()
             .await?;
         check_response(&resp)?;
-        let body: Value = resp.json().await?;
+        let body = body_json(resp).await?;
 
         let plan = body
             .pointer("/userStatus/planStatus")

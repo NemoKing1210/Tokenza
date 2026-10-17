@@ -6,7 +6,7 @@ use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use serde_json::Value;
 
-use super::{home, http, number, read_json, timestamp};
+use super::{body_json, home, http, number, read_json, timestamp};
 use crate::error::check_response;
 use crate::{secrets, Account, Provider, ProviderError, UsageSnapshot, UsageWindow, WindowKind};
 
@@ -80,25 +80,22 @@ impl Provider for CommandCode {
         // Team accounts need their organisation id on the billing calls. Both this lookup and the
         // subscription are optional: without them only the monthly window is lost.
         let org = match get("/whoami", None).send().await {
-            Ok(r) if r.status().is_success() => r
-                .json::<Value>()
+            Ok(r) if r.status().is_success() => body_json(r)
                 .await
                 .ok()
                 .and_then(|b| Some(b.pointer("/org/id")?.as_str()?.to_string())),
             _ => None,
         };
         let sub = match get("/billing/subscriptions", org.as_deref()).send().await {
-            Ok(r) if r.status().is_success() => r
-                .json::<Value>()
-                .await
-                .ok()
-                .and_then(|b| parse_subscription(&b)),
+            Ok(r) if r.status().is_success() => {
+                body_json(r).await.ok().and_then(|b| parse_subscription(&b))
+            }
             _ => None,
         };
 
         let resp = get("/billing/credits", org.as_deref()).send().await?;
         check_response(&resp)?;
-        let body: Value = resp.json().await?;
+        let body = body_json(resp).await?;
 
         let windows = parse(&body, sub.as_ref());
         if windows.is_empty() {

@@ -1,10 +1,10 @@
-import { useEffect, useState } from "react";
 import { Select, Switch } from "@fluentui/react-components";
 import { selectLang, useStore } from "./store";
 import { t, type Key } from "./i18n";
 import { formatDuration, providerName, type Lang } from "./format";
 import type { ProviderPref, ProviderState, Settings, TuneState } from "./types";
 import { Row, Segmented } from "./controls";
+import { useNow } from "./clock";
 
 const MIN = 60;
 export const BASE_OPTIONS = [1, 2, 3, 5, 10, 15, 30, 60].map((m) => m * MIN);
@@ -52,16 +52,6 @@ export function SecondsSelect({
       ))}
     </Select>
   );
-}
-
-/** Ticks once a second so countdowns stay live while the pane is open. */
-function useTick() {
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(id);
-  }, []);
-  return now;
 }
 
 function countdown(iso: string | null, now: number): string | null {
@@ -122,7 +112,7 @@ function ProviderTuning({ pref, st, s, now, lang }: { pref: ProviderPref; st: Pr
 export default function UpdatePane() {
   const data = useStore((s) => s.data);
   const saveSettings = useStore((s) => s.saveSettings);
-  const now = useTick();
+  const now = useNow(1000);
   if (!data) return null;
   const s = data.settings;
   const lang = selectLang(data);

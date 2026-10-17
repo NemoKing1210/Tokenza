@@ -68,6 +68,18 @@ pub const CUSTOM_MAX: usize = 8;
 const ALIAS_MAX_CHARS: usize = 24;
 const HIDDEN_WINDOWS_MAX: usize = 16;
 
+/// Replaces a file in one step: a crash or power cut mid-write would otherwise leave a truncated
+/// settings file, which loads as the defaults and loses every choice and custom provider.
+/// Creates the folder first, which does not exist until something is saved on a fresh install.
+pub fn write_atomic(path: &std::path::Path, contents: &str) -> std::io::Result<()> {
+    if let Some(dir) = path.parent() {
+        std::fs::create_dir_all(dir)?;
+    }
+    let tmp = path.with_extension("json.tmp");
+    std::fs::write(&tmp, contents)?;
+    std::fs::rename(&tmp, path)
+}
+
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Settings {
@@ -273,11 +285,11 @@ impl Settings {
         self.schema = SCHEMA;
     }
 
-    pub fn save(&self, path: &PathBuf) -> std::io::Result<()> {
-        if let Some(dir) = path.parent() {
-            std::fs::create_dir_all(dir)?;
-        }
-        std::fs::write(path, serde_json::to_string_pretty(self).unwrap_or_default())
+    pub fn save(&self, path: &std::path::Path) -> std::io::Result<()> {
+        write_atomic(
+            path,
+            &serde_json::to_string_pretty(self).unwrap_or_default(),
+        )
     }
 
     /// Tuning inputs for one provider; `provider_min` is the interval its API tolerates at least.
@@ -381,6 +393,19 @@ impl Settings {
 #[allow(clippy::field_reassign_with_default)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn save_replaces_the_file_and_leaves_no_temporary_one() {
+        let dir = std::env::temp_dir().join(format!("tokenza-save-test-{}", std::process::id()));
+        let path = dir.join("settings.json");
+        let mut s = Settings::default();
+        s.save(&path).unwrap();
+        s.interval_secs = 600;
+        s.save(&path).unwrap();
+        assert_eq!(Settings::load(&path).interval_secs, 600);
+        assert!(!path.with_extension("json.tmp").exists());
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
 
     #[test]
     fn normalize_adds_missing_and_drops_unknown() {

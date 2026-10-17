@@ -6,6 +6,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- The app could freeze when a settings change met a finished poll while a provider had its own tray icon.
+- A slow or unreachable provider no longer delays the results of the others; a stuck poll is abandoned after 90 seconds.
+- An out-of-range reset time from Codex no longer crashes the app.
+- A provider answer that is not JSON is reported as a changed endpoint instead of "offline".
+- Settings, learned intervals and cached limits are saved atomically, so a crash mid-save cannot reset the settings.
+- On a fresh install the last known limits and learned intervals are now saved even before the settings are first changed.
+- The settings window follows a change of the Windows light/dark mode while it is open.
+
+### Changed
+
+- Less CPU and memory while idle: one shared HTTP client instead of a new one per request, tray icons are only redrawn when they change, tray menus are only rebuilt when the language changes, and countdowns stop ticking while their window is hidden.
+- Response bodies larger than 1 MiB are refused instead of being read into memory.
+
 ## [0.1.1] - 2026-10-17
 
 ### Added

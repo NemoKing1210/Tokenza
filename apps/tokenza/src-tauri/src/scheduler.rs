@@ -16,6 +16,9 @@ const NOT_FOUND_RECHECK: Duration = Duration::from_secs(60);
 const OFFLINE_RETRY: Duration = Duration::from_secs(30);
 /// Manual refresh never hits a provider more often than this.
 const MANUAL_COOLDOWN: Duration = Duration::from_secs(30);
+/// Longest one poll may take, login check included. Requests time out on their own well before
+/// this; it only guarantees that a provider stuck for any other reason is polled again later.
+const POLL_DEADLINE: Duration = Duration::from_secs(90);
 
 enum Outcome {
     NotFound,
@@ -46,7 +49,7 @@ pub fn spawn(app: AppHandle) {
                 .cloned()
                 .chain(custom.iter().map(|(_, p)| p.clone()))
                 .collect();
-            round(&app, &providers, manual).await;
+            round(&app, &providers, manual);
             manual = false;
             tokio::select! {
                 _ = tokio::time::sleep(TICK) => {}
@@ -73,7 +76,9 @@ fn sync_custom(app: &AppHandle, custom: &mut Vec<(CustomDef, Arc<dyn Provider>)>
     }
 }
 
-async fn round(app: &AppHandle, providers: &[Arc<dyn Provider>], manual: bool) {
+/// Starts a poll for every provider that is due. Each poll finishes on its own, so a slow or
+/// unreachable provider holds up neither the others nor the next tick.
+fn round(app: &AppHandle, providers: &[Arc<dyn Provider>], manual: bool) {
     let state = app.state::<AppState>();
     let now = Instant::now();
 
@@ -86,7 +91,7 @@ async fn round(app: &AppHandle, providers: &[Arc<dyn Provider>], manual: bool) {
                 continue;
             };
             st.enabled = enabled;
-            if !enabled {
+            if !enabled || st.in_flight {
                 continue;
             }
             let scheduled = st.next_due.is_none_or(|t| t <= now);
@@ -96,6 +101,7 @@ async fn round(app: &AppHandle, providers: &[Arc<dyn Provider>], manual: bool) {
                     .map_or(true, |d| d >= MANUAL_COOLDOWN)
             });
             if scheduled || (manual && cooled) {
+                st.in_flight = true;
                 due.push(p.clone());
             }
         }
@@ -109,31 +115,51 @@ async fn round(app: &AppHandle, providers: &[Arc<dyn Provider>], manual: bool) {
         return;
     }
 
-    let handles: Vec<_> = due
-        .into_iter()
-        .map(|p| {
-            tauri::async_runtime::spawn(async move {
-                let id = p.id().to_string();
-                let min = p.min_interval();
-                let outcome = match p.detect() {
-                    None => Outcome::NotFound,
-                    Some(acc) => Outcome::Fetched(p.fetch(&acc).await),
-                };
-                (id, min, outcome)
-            })
-        })
-        .collect();
+    for p in due {
+        let app = app.clone();
+        tauri::async_runtime::spawn(async move {
+            let id = p.id().to_string();
+            let min = p.min_interval();
+            let outcome = poll(p).await;
+            finish(&app, &id, min, outcome);
+        });
+    }
+}
 
-    let mut toasts = Vec::new();
-    for h in handles {
-        let Ok((id, min, outcome)) = h.await else {
-            continue;
-        };
+async fn poll(p: Arc<dyn Provider>) -> Outcome {
+    let mut work = tauri::async_runtime::spawn(async move {
+        // Login files (and Cursor's SQLite database) are read with blocking calls.
+        let probe = p.clone();
+        let acc = tauri::async_runtime::spawn_blocking(move || probe.detect())
+            .await
+            .ok()
+            .flatten();
+        match acc {
+            None => Outcome::NotFound,
+            Some(acc) => Outcome::Fetched(p.fetch(&acc).await),
+        }
+    });
+    match tokio::time::timeout(POLL_DEADLINE, &mut work).await {
+        Ok(Ok(outcome)) => outcome,
+        // The poll panicked; reported like a broken answer so the provider is retried later.
+        Ok(Err(_)) => Outcome::Fetched(Err(ProviderError::SchemaChanged("poll failed".into()))),
+        Err(_) => {
+            work.abort();
+            Outcome::Fetched(Err(ProviderError::Offline("timed out".into())))
+        }
+    }
+}
+
+/// Records one poll's outcome, then saves, notifies and redraws.
+fn finish(app: &AppHandle, id: &str, min: Duration, outcome: Outcome) {
+    let state = app.state::<AppState>();
+    {
         let mut g = state.lock();
-        let params = g.settings.params(&id, min);
+        let params = g.settings.params(id, min);
         let Some(st) = g.providers.iter_mut().find(|s| s.id == id) else {
-            continue;
+            return;
         };
+        st.in_flight = false;
         st.last_attempt = Some(Utc::now());
         st.min_secs = min.as_secs();
         match outcome {
@@ -182,12 +208,15 @@ async fn round(app: &AppHandle, providers: &[Arc<dyn Provider>], manual: bool) {
                 st.next_due = Some(Instant::now() + delay);
             }
         }
-        drop(g);
+        // A key or tuning change that came in while this poll ran asks for a fresh one.
+        if std::mem::take(&mut st.requeue) {
+            st.next_due = None;
+        }
     }
 
     state.save_tuning();
     state.save_snapshots();
-    toasts.extend(notify::evaluate(&mut state.lock()));
+    let toasts = notify::evaluate(&mut state.lock());
     notify::show(app, toasts);
     publish(app);
 }

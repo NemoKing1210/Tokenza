@@ -9,7 +9,7 @@ use tokenza_core::{CustomDef, ProviderError, UsageSnapshot};
 use tokio::sync::Notify;
 
 use crate::adaptive::{Learned, TuneState, Tuner};
-use crate::settings::{Settings, CUSTOM_MAX};
+use crate::settings::{write_atomic, Settings, CUSTOM_MAX};
 
 #[derive(Clone, Serialize)]
 pub struct ErrorInfo {
@@ -49,6 +49,12 @@ pub struct ProviderState {
     pub fails: u32,
     #[serde(skip)]
     pub next_due: Option<Instant>,
+    /// A poll is running; the scheduler starts no second one.
+    #[serde(skip)]
+    pub in_flight: bool,
+    /// Something changed while a poll ran (a key, the tuning), so poll again once it is back.
+    #[serde(skip)]
+    pub requeue: bool,
 }
 
 impl ProviderState {
@@ -66,6 +72,8 @@ impl ProviderState {
             min_secs: 60,
             fails: 0,
             next_due: None,
+            in_flight: false,
+            requeue: false,
         }
     }
 }
@@ -237,6 +245,7 @@ impl AppState {
             st.tuner.reset();
             st.fails = 0;
             st.next_due = None;
+            st.requeue = st.in_flight;
         }
     }
 
@@ -249,8 +258,8 @@ impl AppState {
             .filter_map(|p| p.tuner.learned().map(|l| (p.id.clone(), l)))
             .collect();
         let text = serde_json::to_string(&map).unwrap_or_default();
-        if text != g.tuning_saved {
-            let _ = std::fs::write(tuning_path(&self.settings_path), &text);
+        if text != g.tuning_saved && write_atomic(&tuning_path(&self.settings_path), &text).is_ok()
+        {
             g.tuning_saved = text;
         }
     }
@@ -265,8 +274,9 @@ impl AppState {
             .filter_map(|p| p.snapshot.as_ref().map(|s| (p.id.as_str(), s)))
             .collect();
         let text = serde_json::to_string(&map).unwrap_or_default();
-        if text != g.snapshots_saved {
-            let _ = std::fs::write(snapshots_path(&self.settings_path), &text);
+        if text != g.snapshots_saved
+            && write_atomic(&snapshots_path(&self.settings_path), &text).is_ok()
+        {
             g.snapshots_saved = text;
         }
     }
@@ -351,6 +361,7 @@ impl AppState {
         if let Some(st) = self.lock().providers.iter_mut().find(|s| s.id == id) {
             st.fails = 0;
             st.next_due = None;
+            st.requeue = st.in_flight;
         }
         self.wake.notify_one();
     }

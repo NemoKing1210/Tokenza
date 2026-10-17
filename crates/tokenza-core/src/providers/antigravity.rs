@@ -11,7 +11,7 @@ use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use serde_json::{json, Value};
 
-use super::{home, http_no_redirect, number, rfc3339, timestamp};
+use super::{body_json, home, http_no_redirect, number, rfc3339, timestamp};
 use crate::error::check_response;
 use crate::{Account, Provider, ProviderError, UsageSnapshot, UsageWindow, WindowKind};
 
@@ -81,7 +81,7 @@ impl Provider for Antigravity {
             .send()
             .await?;
         check_response(&resp)?;
-        let body: Value = resp.json().await?;
+        let body = body_json(resp).await?;
 
         let now = Utc::now();
         let windows = parse(&body, now);

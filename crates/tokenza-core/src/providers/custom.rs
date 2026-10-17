@@ -9,12 +9,11 @@ use reqwest::header::{HeaderName, HeaderValue, ACCEPT, AUTHORIZATION, COOKIE};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use super::{http_no_redirect, number, timestamp};
+use super::{body_json, http_no_redirect, number, timestamp};
 use crate::error::check_response;
 use crate::secrets::{self, CUSTOM_FIELD};
 use crate::{Account, Provider, ProviderError, UsageSnapshot, UsageWindow, WindowKind};
 
-const MAX_BODY: usize = 1 << 20;
 const MAX_WINDOWS: usize = 6;
 const NAME_MAX: usize = 24;
 const LABEL_MAX: usize = 24;
@@ -231,12 +230,7 @@ pub async fn fetch_windows(
     };
     let resp = req.send().await?;
     check_response(&resp)?;
-    let bytes = resp.bytes().await?;
-    if bytes.len() > MAX_BODY {
-        return Err(ProviderError::SchemaChanged("response is too large".into()));
-    }
-    let body: Value = serde_json::from_slice(&bytes)
-        .map_err(|_| ProviderError::SchemaChanged("response is not JSON".into()))?;
+    let body = body_json(resp).await?;
 
     let windows = parse(def, &body);
     if windows.is_empty() {
