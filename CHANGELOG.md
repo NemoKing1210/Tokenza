@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-10-22
+
 ### Fixed
 
 - The app could freeze when a settings change met a finished poll while a provider had its own tray icon.

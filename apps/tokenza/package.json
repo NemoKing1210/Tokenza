@@ -3,7 +3,7 @@
   "private": true,
   "description": "Tokenza desktop app: Windows tray app for AI agent usage limits",
   "license": "MIT",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "type": "module",
   "scripts": {
     "dev": "vite",
