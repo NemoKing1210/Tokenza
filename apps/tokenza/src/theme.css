@@ -2,6 +2,9 @@
 :root {
   --bg-flyout: #f3f3f5;
   --flyout-tint: rgb(243 243 243 / 0.78);
+  --card-fill: rgb(255 255 255 / 0.7);
+  --stroke-card: rgb(0 0 0 / 0.058);
+  --hover-fill: rgb(0 0 0 / 0.0373);
   --bg-card: #ffffff;
   --bg-track: #e4e4e8;
   --border: #e2e2e6;
@@ -19,6 +22,9 @@
   :root:not([data-theme]) {
     --bg-flyout: #2c2c2e;
     --flyout-tint: rgb(24 24 26 / 0.66);
+    --card-fill: rgb(255 255 255 / 0.0512);
+    --stroke-card: rgb(0 0 0 / 0.1);
+    --hover-fill: rgb(255 255 255 / 0.0605);
     --bg-card: #3a3a3c;
     --bg-track: #55555a;
     --border: #4a4a4e;
@@ -35,6 +41,9 @@
 :root[data-theme="dark"] {
   --bg-flyout: #2c2c2e;
   --flyout-tint: rgb(24 24 26 / 0.66);
+  --card-fill: rgb(255 255 255 / 0.0512);
+  --stroke-card: rgb(0 0 0 / 0.1);
+  --hover-fill: rgb(255 255 255 / 0.0605);
   --bg-card: #3a3a3c;
   --bg-track: #55555a;
   --border: #4a4a4e;
@@ -99,15 +108,16 @@ button:focus-visible, .seg:focus-visible { outline: 2px solid var(--accent); out
 .link-btn svg { color: var(--text-2); }
 
 .card {
-  display: flex; flex-direction: column; gap: 14px;
-  padding: 12px;
-  background: var(--bg-card);
-  border: 1px solid var(--border);
+  display: flex; flex-direction: column; gap: 12px;
+  padding: 12px 16px;
+  /* A faint fill over the acrylic and a hairline, like the Windows 11 flyout cards. */
+  background: var(--card-fill);
+  border: 1px solid var(--stroke-card);
   border-radius: 8px;
 }
 .card-muted { opacity: 0.8; }
 
-.card-head { display: flex; align-items: center; gap: 8px; }
+.card-head { display: flex; align-items: center; gap: 10px; }
 .card-name { flex: 1; font-size: 14px; font-weight: 600; }
 .logo {
   display: inline-grid; place-items: center; flex: none;
@@ -135,13 +145,13 @@ button:focus-visible, .seg:focus-visible { outline: 2px solid var(--accent); out
 .ccard-sub { font-size: 10px; }
 .card-note { font-size: 12px; padding: 4px 0; }
 
-.track { height: 6px; border-radius: 3px; background: var(--bg-track); overflow: hidden; }
-.fill { height: 100%; border-radius: 3px; transition: width 0.3s ease; }
+.track { height: 4px; border-radius: 2px; background: var(--bg-track); overflow: hidden; }
+.fill { height: 100%; border-radius: 2px; transition: width 0.3s ease; }
 .fill.tone-accent { background: var(--accent); }
 .fill.tone-warning { background: var(--warning); }
 .fill.tone-critical { background: var(--critical); }
 
-.banner { display: flex; gap: 10px; padding: 10px; border-radius: 6px; background: var(--bg-flyout); }
+.banner { display: flex; gap: 10px; padding: 10px; border-radius: 6px; background: var(--hover-fill); }
 .banner-icon { flex: none; display: inline-flex; margin-top: 1px; }
 .banner-title { font-weight: 600; }
 .banner-hint { font-size: 12px; color: var(--text-2); margin-top: 2px; }
@@ -225,10 +235,10 @@ button:focus-visible, .seg:focus-visible { outline: 2px solid var(--accent); out
 
 .ccard {
   display: flex; flex-direction: column; gap: 6px;
-  padding: 8px 10px;
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: 6px;
+  padding: 8px 12px;
+  background: var(--card-fill);
+  border: 1px solid var(--stroke-card);
+  border-radius: 8px;
 }
 .ccard-head { display: flex; align-items: center; gap: 6px; }
 .ccard-name { flex: 1; font-size: 13px; font-weight: 600; }
@@ -293,12 +303,11 @@ button:focus-visible, .seg:focus-visible { outline: 2px solid var(--accent); out
 button { transition: background-color 0.15s ease, transform 0.12s var(--ease-move), opacity 0.15s ease, color 0.15s ease; }
 .btn:active, .icon-btn:active:not(:disabled), .link-btn:active, .seg:active, .nav-item:active { transform: scale(0.96); }
 .card, .ccard { transition: border-color 0.2s ease, box-shadow 0.25s ease; }
-.card:hover, .ccard:hover { box-shadow: 0 3px 14px rgba(0, 0, 0, 0.14); }
 /* The card of the provider whose own tray icon was clicked. */
 .card.is-focus, .ccard.is-focus {
   border-color: var(--accent);
   box-shadow: 0 0 0 1px var(--accent), 0 4px 18px color-mix(in srgb, var(--accent) 28%, transparent);
-  background: color-mix(in srgb, var(--accent) 7%, var(--bg-card));
+  background: color-mix(in srgb, var(--accent) 9%, transparent);
 }
 .banner, .cstatus { animation: fade-in 0.35s ease both; }
 @keyframes fade-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
