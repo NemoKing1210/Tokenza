@@ -93,8 +93,8 @@ button:focus-visible, .seg:focus-visible { outline: 2px solid var(--accent); out
 .flyout {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 14px 16px 12px;
+  gap: 6px;
+  padding: 12px 12px 8px;
   /* No border or radius: the window already has the DWM border and rounded corners, a second one shows as a double border.
      The tint (the shell's dark/light base over the blur) is on the page root. */
 }
@@ -231,7 +231,7 @@ button:focus-visible, .seg:focus-visible { outline: 2px solid var(--accent); out
 .seg-on { background: var(--bg-card); font-weight: 600; }
 
 /* ---------- Compact view ---------- */
-.flyout-compact { gap: 6px; padding: 10px 12px 8px; }
+
 
 .ccard {
   display: flex; flex-direction: column; gap: 6px;
@@ -278,8 +278,8 @@ button:focus-visible, .seg:focus-visible { outline: 2px solid var(--accent); out
 }
 
 /* Entrance: the flyout's header, cards and footer rise in one after another, bars grow from the left. */
-@keyframes rise-a { from { opacity: 0; transform: translateY(12px) scale(0.985); } to { opacity: 1; transform: none; } }
-@keyframes rise-b { from { opacity: 0; transform: translateY(12px) scale(0.985); } to { opacity: 1; transform: none; } }
+@keyframes rise-a { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@keyframes rise-b { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 @keyframes grow-a { from { transform: scaleX(0); } to { transform: scaleX(1); } }
 @keyframes grow-b { from { transform: scaleX(0); } to { transform: scaleX(1); } }
 
@@ -287,6 +287,8 @@ button:focus-visible, .seg:focus-visible { outline: 2px solid var(--accent); out
 .flyout[data-phase="hidden"] .stagger { opacity: 0; }
 .flyout[data-phase="hidden"] .fill { transform: scaleX(0); }
 
+/* Kept on its own layer for good, so the text is not re-rasterised (and nudged a pixel) when the entrance ends. */
+.flyout .stagger { will-change: transform, opacity; }
 .flyout.is-entering .stagger {
   animation: rise-a 0.42s var(--ease-out) both;
   animation-delay: calc(var(--i, 0) * 50ms);
@@ -357,8 +359,7 @@ button { transition: background-color 0.15s ease, transform 0.12s var(--ease-mov
 .tb-brand { display: flex; align-items: center; gap: 8px; padding-left: 14px; min-width: 0; pointer-events: none; }
 .tb-mark { flex: none; color: var(--text); }
 .tb-name { font-size: 12.5px; font-weight: 600; letter-spacing: 0.01em; }
-.tb-sep { color: var(--text-2); opacity: 0.55; }
-.tb-title { font-size: 12.5px; color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tb-version { font-size: 11.5px; color: var(--text-2); }
 .tb-controls { display: flex; flex: none; }
 .tb-btn {
   display: grid; place-items: center;

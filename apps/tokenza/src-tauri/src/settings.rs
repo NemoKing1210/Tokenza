@@ -118,8 +118,6 @@ pub struct Settings {
     pub tray_provider: String,
     /// Kinds of limit windows the tray icon looks at, from `TRAY_KINDS`; never empty.
     pub tray_kinds: Vec<String>,
-    /// Flyout density: "standard" | "compact"
-    pub view_mode: String,
     /// Order of the list is the order of the cards.
     pub providers: Vec<ProviderPref>,
     /// Providers the user defined; their keys are in the credential store, not here.
@@ -148,7 +146,6 @@ impl Default for Settings {
             tray_source: "all".into(),
             tray_provider: KNOWN_PROVIDERS[0].into(),
             tray_kinds: TRAY_KINDS.iter().map(|k| (*k).into()).collect(),
-            view_mode: "standard".into(),
             providers: KNOWN_PROVIDERS
                 .iter()
                 .map(|id| ProviderPref {
@@ -256,9 +253,6 @@ impl Settings {
         // An icon that watches nothing would always look empty, so no choice means every kind.
         if self.tray_kinds.is_empty() {
             self.tray_kinds = TRAY_KINDS.iter().map(|k| (*k).into()).collect();
-        }
-        if !matches!(self.view_mode.as_str(), "standard" | "compact") {
-            self.view_mode = "standard".into();
         }
     }
 
@@ -427,10 +421,8 @@ mod tests {
         ];
         s.crit_pct = 10.0;
         s.interval_secs = 5;
-        s.view_mode = "tiny".into();
         s.lang = "klingon".into();
         s.normalize();
-        assert_eq!(s.view_mode, "standard");
         assert_eq!(s.lang, "auto", "unknown language falls back to auto");
         assert_eq!(
             s.providers[0].interval_secs,

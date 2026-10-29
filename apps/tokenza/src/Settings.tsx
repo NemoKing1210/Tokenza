@@ -210,17 +210,6 @@ export default function SettingsView() {
             ))}
           </Select>
         </Row>
-        <Row title={t(lang, "viewMode")} hint={t(lang, "viewModeHint")}>
-          <Segmented
-            label={t(lang, "viewMode")}
-            value={s.view_mode}
-            onChange={(v) => saveSettings({ view_mode: v })}
-            options={[
-              { value: "standard", label: t(lang, "viewStandard") },
-              { value: "compact", label: t(lang, "viewCompact") },
-            ]}
-          />
-        </Row>
       </>
     ),
     general: (
@@ -240,7 +229,7 @@ export default function SettingsView() {
   return (
     <FluentProvider theme={isDark ? webDarkTheme : webLightTheme} style={{ background: "transparent" }}>
       <div className="window">
-      <TitleBar lang={lang} title={t(lang, "settings")} />
+      <TitleBar lang={lang} />
       <div className="settings">
         <nav className="nav" aria-label="Sections">
           {NAV.map(([id, key]) => (

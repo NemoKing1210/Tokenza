@@ -36,7 +36,7 @@ Tokenza watches **Claude Code**, **Codex**, **Cursor**, **OpenCode** (Go plan), 
 | | |
 |---|---|
 | 🎯 **Tray icon** | Shows your worst limit as a ring, two bars (5 h and weekly), a pie or a number. Choose whose limits it follows (all providers, a few, or one) and which periods count. Any provider can also get an icon of its own, with its logo. |
-| 🗂️ **Flyout** | One card per provider: usage, time until reset, last update. Standard and compact views. |
+| 🗂️ **Flyout** | One card per provider: usage, time until reset, last update, one line per limit window. |
 | ⌨️ **Global hotkey** | `Ctrl`+`Alt`+`T` by default opens the flyout in the middle of the screen the mouse is on, without touching the tray; press it again to close. Can be turned off or changed in Settings. |
 | 🔔 **Notifications** | When usage crosses a warning or critical threshold (once per reset cycle) and when a limit becomes available again. |
 | 🧠 **Smart polling** | Tunes the refresh rate per provider: faster near a limit, slower when idle, and backs off when a provider rate-limits you. A fixed interval is also available. |
@@ -51,20 +51,14 @@ Tokenza watches **Claude Code**, **Codex**, **Cursor**, **OpenCode** (Go plan), 
 
 ### Flyout
 
-Standard view on the left, compact view on the right. The colour follows the same thresholds as the tray icon: blue, amber from 70 %, red above 90 %.
+The colour follows the same thresholds as the tray icon: blue, amber from 70 %, red above 90 %.
 
 <table>
   <tr>
     <td align="center" valign="top">
       <picture>
-        <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/flyout-dark.png">
-        <img src="docs/screenshots/flyout-light.png" alt="Flyout, standard view" width="340">
-      </picture>
-    </td>
-    <td align="center" valign="top">
-      <picture>
         <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/flyout-compact-dark.png">
-        <img src="docs/screenshots/flyout-compact-light.png" alt="Flyout, compact view" width="340">
+        <img src="docs/screenshots/flyout-compact-light.png" alt="Flyout" width="340">
       </picture>
     </td>
   </tr>
@@ -98,7 +92,7 @@ Tokenza is built to be easy to audit:
 | Claude Code  | `api.anthropic.com`            | `~/.claude/.credentials.json`                                                               |
 | Codex        | `chatgpt.com`                  | `~/.codex/auth.json`                                                                        |
 | Cursor       | `cursor.com`                   | Cursor's local `state.vscdb` (opened read-only)                                             |
-| OpenCode Go  | `opencode.ai`                  | `OPENCODE_GO_WORKSPACE_ID` and `OPENCODE_GO_AUTH_COOKIE` environment variables (see below)  |
+| OpenCode Go  | `opencode.ai`                  | The `opencode` CLI's login in `~/.local/share/opencode/opencode.db` (opened read-only)      |
 | Command Code | `api.commandcode.ai`           | `~/.commandcode/auth.json` (or `COMMAND_CODE_API_KEY`)                                      |
 | Devin        | `server.codeium.com`           | `%APPDATA%\Devin\credentials.toml` (the CLI's API key)                                      |
 | Antigravity  | `cloudcode-pa.googleapis.com`  | `~/.gemini/antigravity-cli/antigravity-oauth-token` (read-only; unverified, see below)      |
@@ -121,7 +115,7 @@ Devin's daily and weekly quota is read with the API key the Devin CLI keeps in `
 
 <br>
 
-The OpenCode console has no API-key access to usage, and the `opencode` CLI does not store a console login, so Tokenza never touches your browser's cookies. (It only checks that `~/.local/share/opencode/auth.json` has an `opencode-go` entry, to tell "installed but not connected" from "not installed"; the key is not used.) Instead, open the OpenCode card in **Settings → Providers** and enter the workspace ID (the `wrk_…` part of `opencode.ai/workspace/wrk_…/go`) and the value of the `__Host-console_session` cookie, copied from your browser's developer tools. The `OPENCODE_GO_WORKSPACE_ID` and `OPENCODE_GO_AUTH_COOKIE` environment variables work too. The cookie expires eventually; replace it when the card asks you to sign in again.
+Signed in to the `opencode` CLI (`opencode auth login`, or the console login of a recent version)? Then there is nothing to set up: Tokenza reads the CLI's login token read-only from `opencode.db` (or the Go key in an older `auth.json`) and sends it to `opencode.ai/zen/go/v1/usage`. It never refreshes the token; if it has lapsed, run the CLI once. Without a CLI login, Tokenza never touches your browser's cookies; instead, open the OpenCode card in **Settings → Providers** and enter the workspace ID (the `wrk_…` part of `opencode.ai/workspace/wrk_…/go`) and the value of the `__Host-console_session` cookie, copied from your browser's developer tools. The `OPENCODE_GO_WORKSPACE_ID` and `OPENCODE_GO_AUTH_COOKIE` environment variables work too. The cookie expires eventually; replace it when the card asks you to sign in again.
 
 </details>
 

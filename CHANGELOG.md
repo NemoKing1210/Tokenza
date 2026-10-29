@@ -9,9 +9,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Changed
 
 - The flyout uses the Windows 11 acrylic backdrop in the app's own theme (also when "light" or "dark" differs from the system) and takes the Windows accent colour. The title is gone and its buttons moved to the bottom row.
+- The standard flyout view and the "Flyout view" setting are gone; the compact view is the only one now.
 
 ### Fixed
 
+- OpenCode Go showed "Sign in again" even with a working `opencode` login. Tokenza now reads the CLI's login from `opencode.db` and queries the official usage endpoint, so no cookie or workspace ID is needed. The cookie fallback also handles the console's string-typed meter values.
 - "Start with Windows" now repairs a stale path left by a moved, reinstalled or dev build, and `tauri dev` no longer registers a debug executable for login.
 - The settings window no longer flashes white on a dark theme while it loads.
 - A usage bar at 0% no longer shows a sliver of colour.

@@ -115,7 +115,6 @@ export interface Settings {
   tray_provider: string;
   /** Kinds of limit windows the tray icon looks at; never empty. */
   tray_kinds: TrayKind[];
-  view_mode: "standard" | "compact";
   providers: ProviderPref[];
   custom_providers: CustomDef[];
 }

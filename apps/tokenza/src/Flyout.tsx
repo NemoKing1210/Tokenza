@@ -16,7 +16,7 @@ import {
   type Lang,
 } from "./format";
 import type { CustomDef, ProviderPref, ProviderState, UsageWindow } from "./types";
-import { AlertIcon, DensityIcon, GearIcon, LockIcon, OfflineIcon, RefreshIcon, SearchIcon } from "./icons";
+import { AlertIcon, GearIcon, LockIcon, OfflineIcon, RefreshIcon, SearchIcon } from "./icons";
 
 /** The user's alias when set, else the built-in provider name. */
 export const displayName = (id: string, pref?: ProviderPref, custom?: CustomDef[]) => pref?.alias?.trim() || providerName(id, custom);
@@ -33,139 +33,6 @@ const cardStyle = (index: number, id: string): CSSProperties =>
 const SHRINK_DELAY_MS = 300;
 /** Longest entrance (last card's delay plus its duration); after it, remounts do not replay it. */
 const ENTER_MS = 1100;
-
-export function UsageRow({ w, lang, now }: { w: UsageWindow; lang: Lang; now: number }) {
-  const label = windowLabel(w, lang);
-  if (w.used_pct === null) {
-    // Credit balance has no percentage, so no bar.
-    return (
-      <div className="usage-row">
-        <div className="usage-head">
-          <span className="usage-label">{label}</span>
-          <span className="usage-pct">{w.detail ?? "—"}</span>
-        </div>
-      </div>
-    );
-  }
-  return <PercentRow w={w} pctValue={w.used_pct} label={label} lang={lang} now={now} />;
-}
-
-function PercentRow({ w, pctValue, label, lang, now }: { w: UsageWindow; pctValue: number; label: string; lang: Lang; now: number }) {
-  const pct = Math.max(0, Math.min(100, pctValue));
-  const tone = toneFor(pct);
-  const shown = useCountUp(pct);
-  return (
-    <div className="usage-row">
-      <div className="usage-head">
-        <span className="usage-label">{label}</span>
-        <span className="usage-pct">{Math.round(shown)}%</span>
-      </div>
-      <div
-        className="track"
-        role="progressbar"
-        aria-label={label}
-        aria-valuemin={0}
-        aria-valuemax={100}
-        aria-valuenow={Math.round(pct)}
-      >
-        <div className={`fill tone-${tone}`} style={{ width: `${pct > 0 ? Math.max(pct, 1) : 0}%` }} />
-      </div>
-      <div className="usage-reset">{formatReset(w.resets_at, now, lang, w.kind === "Monthly")}</div>
-    </div>
-  );
-}
-
-function Banner({ icon, tone, title, hint, detail }: { icon: ReactNode; tone: string; title: string; hint: string; detail?: string }) {
-  return (
-    <div className="banner" role="status">
-      <span className={`banner-icon text-${tone}`}>{icon}</span>
-      <div>
-        <div className="banner-title">{title}</div>
-        <div className="banner-hint">{hint}</div>
-        {detail && <div className="banner-hint">{detail}</div>}
-      </div>
-    </div>
-  );
-}
-
-function errorBanner(p: ProviderState, lang: Lang, name: string) {
-  const kind = p.error?.kind;
-  // Error messages hold only status codes and fixed phrases, never credentials; they tell a changed endpoint from a wrong setup.
-  const pick = (title: Key, hint: Key, icon: ReactNode, tone: string, detail?: string) => (
-    <Banner icon={icon} tone={tone} title={t(lang, title)} hint={t(lang, hint, { name })} detail={detail} />
-  );
-  switch (kind) {
-    case "NotLoggedIn":
-      // Providers fed by credentials typed into Tokenza have no CLI login to refresh.
-      if (secretFieldsFor(p.id).length > 0) return pick("connectTitle", "connectHint", <LockIcon />, "warning");
-      return pick("loginTitle", "loginHint", <LockIcon />, "warning");
-    case "TokenExpired":
-      return pick("loginTitle", "loginHint", <LockIcon />, "warning");
-    case "NoSubscription":
-      return pick("noSubTitle", "noSubHint", <LockIcon />, "secondary");
-    case "SchemaChanged":
-      return pick("schemaTitle", "schemaHint", <AlertIcon />, "critical", p.error?.message);
-    case "RateLimited":
-      return pick("rateTitle", "rateHint", <AlertIcon />, "warning");
-    default:
-      return pick("offlineTitle", "offlineHint", <OfflineIcon />, "secondary");
-  }
-}
-
-export function ProviderCard({ p, lang, now, index = 0, pref, focused = false }: { p: ProviderState; lang: Lang; now: number; index?: number; pref?: ProviderPref; focused?: boolean }) {
-  const refresh = useStore((s) => s.refresh);
-  const name = displayName(p.id, pref, useCustomProviders());
-  const windows = visibleWindows(p, pref);
-  // Claude's usage endpoint reports no plan; the placeholder label is not worth a pill.
-  const account = p.snapshot?.account === "claude.ai" ? "" : (p.snapshot?.account ?? "");
-  const plan = p.status === "not_found" ? t(lang, "notFound") : planLabel(account);
-
-  return (
-    <section
-      className={`card stagger${p.status === "not_found" ? " card-muted" : ""}${focused ? " is-focus" : ""}`}
-      aria-label={name}
-      data-provider={p.id}
-      style={cardStyle(index, p.id)}
-    >
-      <header className="card-head">
-        <ProviderLogo id={p.id} name={name} />
-        <span className="card-name">{name}</span>
-        {plan && <span className="pill">{plan}</span>}
-      </header>
-
-      {p.status === "not_found" && (
-        <Banner icon={<SearchIcon />} tone="secondary" title={t(lang, "notFoundTitle")} hint={t(lang, "notFoundHint", { name })} />
-      )}
-
-      {p.status === "pending" && <div className="card-note">{t(lang, "pending")}</div>}
-
-      {p.snapshot && p.status !== "not_found" && (
-        <div className={`rows ${p.status === "error" ? "dimmed" : ""}`}>
-          {windows.map((w, i) => (
-            <UsageRow key={`${w.kind}-${w.label}-${i}`} w={w} lang={lang} now={now} />
-          ))}
-        </div>
-      )}
-
-      {p.snapshot && p.status === "error" && (
-        <div className="card-sub">{t(lang, "staleSince", { x: formatDuration(now - new Date(p.snapshot.fetched_at).getTime(), lang) })}</div>
-      )}
-
-      {p.snapshot?.subscription_ends_at && p.status !== "not_found" && (
-        <div className="card-sub">{formatSubscriptionEnd(p.snapshot.subscription_ends_at, now, lang)}</div>
-      )}
-
-      {p.status === "error" && (
-        <>
-          {errorBanner(p, lang, name)}
-          <button className="btn" onClick={refresh}>
-            {t(lang, "retry")}
-          </button>
-        </>
-      )}
-    </section>
-  );
-}
 
 function CompactRow({ w, lang, now }: { w: UsageWindow; lang: Lang; now: number }) {
   // The label column is narrow, so the long monthly name gets a short form (full text stays in the tooltip).
@@ -329,38 +196,23 @@ export default function Flyout() {
 
   const lang = selectLang(data);
   const visible = data?.providers.filter((p) => p.enabled) ?? [];
-  const compact = data?.settings.view_mode === "compact";
   const prefOf = (id: string) => data?.settings.providers.find((x) => x.id === id);
-  const toggleLabel = t(lang, compact ? "switchToStandard" : "switchToCompact");
 
   return (
     <EnterContext.Provider value={enterCtx}>
     <div
-      className={`flyout${compact ? " flyout-compact" : ""}${entering ? " is-entering" : ""}`}
+      className={`flyout${entering ? " is-entering" : ""}`}
       ref={rootRef}
       data-phase={flyout.phase}
       data-enter={flyout.enter % 2 ? "a" : "b"}
       style={{ viewTransitionName: "flyout" } as CSSProperties}
     >
       {data && visible.length === 0 && <div className="card-note">{t(lang, "empty")}</div>}
-      {visible.map((p, i) =>
-        compact ? (
-          <CompactCard key={p.id} p={p} lang={lang} now={now} index={i + 1} pref={prefOf(p.id)} focused={flyout.focus === p.id} />
-        ) : (
-          <ProviderCard key={p.id} p={p} lang={lang} now={now} index={i + 1} pref={prefOf(p.id)} focused={flyout.focus === p.id} />
-        ),
-      )}
+      {visible.map((p, i) => (
+        <CompactCard key={p.id} p={p} lang={lang} now={now} index={i + 1} pref={prefOf(p.id)} focused={flyout.focus === p.id} />
+      ))}
 
       <footer className="flyout-foot stagger" style={{ "--i": visible.length } as CSSProperties}>
-        <button
-          className="icon-btn"
-          onClick={() => saveSettings({ view_mode: compact ? "standard" : "compact" })}
-          aria-label={toggleLabel}
-          title={toggleLabel}
-        >
-          <DensityIcon compact={compact} />
-        </button>
-        <span className="spacer" />
         <button
           className={refreshing ? "icon-btn is-spinning" : "icon-btn"}
           onClick={refresh}
@@ -370,6 +222,7 @@ export default function Flyout() {
         >
           <RefreshIcon />
         </button>
+        <span className="spacer" />
         <button className="icon-btn" onClick={openSettings} aria-label={t(lang, "settings")} title={t(lang, "settings")}>
           <GearIcon />
         </button>

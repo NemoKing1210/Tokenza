@@ -32,7 +32,6 @@ export function demoState(): AppStateDto {
       tray_source: "all",
       tray_provider: "claude",
       tray_kinds: ["session", "daily", "weekly", "monthly"],
-      view_mode: "standard",
       custom_providers: [],
       providers: [
         { id: "claude", enabled: true, interval_secs: null, show_in_tray: true, own_tray_icon: false, notify: true, hidden_windows: [], alias: null },

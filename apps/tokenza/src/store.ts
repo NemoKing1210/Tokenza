@@ -12,7 +12,7 @@ async function call<T>(cmd: string, args?: Record<string, unknown>): Promise<T> 
 }
 
 /** Setting changes that reshape the UI and therefore look better as one morph. */
-const VISUAL_KEYS: (keyof Settings)[] = ["theme", "lang", "view_mode", "providers"];
+const VISUAL_KEYS: (keyof Settings)[] = ["theme", "lang", "providers"];
 
 /** The spinner shows for at least this long so a fast refresh still reads as an action. */
 const MIN_SPIN_MS = 700;

@@ -39,20 +39,6 @@ export const GearIcon = ({ size = 16 }: { size?: number }) => (
   </svg>
 );
 
-/** Density toggle: dense lines when `compact`, spaced blocks otherwise. */
-export const DensityIcon = ({ compact, size = 16 }: { compact: boolean; size?: number }) => (
-  <svg {...base(size)}>
-    {compact ? (
-      <path d="M3 5h14M3 8.5h14M3 12h14M3 15.5h14" />
-    ) : (
-      <>
-        <rect x="3" y="3.5" width="14" height="5" rx="1.5" />
-        <rect x="3" y="11.5" width="14" height="5" rx="1.5" />
-      </>
-    )}
-  </svg>
-);
-
 /** Six-dot drag handle. */
 export const GripIcon = ({ size = 16 }: { size?: number }) => (
   <svg width={size} height={size} viewBox="0 0 16 16" fill="currentColor" aria-hidden>

@@ -39,9 +39,18 @@ async function win() {
   return getCurrentWindow();
 }
 
-/** Replaces the native Windows title bar: drag area, title and minimize / maximize / close. */
-export default function TitleBar({ lang, title }: { lang: Lang; title: string }) {
+/** Replaces the native Windows title bar: drag area, minimize / maximize / close. */
+export default function TitleBar({ lang }: { lang: Lang }) {
   const [maximized, setMaximized] = useState(false);
+  const [version, setVersion] = useState("");
+
+  useEffect(() => {
+    if (!inTauri) return;
+    void import("@tauri-apps/api/core")
+      .then(({ invoke }) => invoke<{ version: string }>("about_info"))
+      .then((i) => setVersion(i.version))
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (!inTauri) return;
@@ -70,10 +79,7 @@ export default function TitleBar({ lang, title }: { lang: Lang; title: string })
       <div className="tb-brand">
         <Mark />
         <span className="tb-name">Tokenza</span>
-        <span className="tb-sep" aria-hidden>
-          /
-        </span>
-        <span className="tb-title">{title}</span>
+        {version && <span className="tb-version">v{version}</span>}
       </div>
       <div className="tb-controls">
         <Control kind="minimize" label={t(lang, "winMinimize")} onClick={run((w) => w.minimize())} />
