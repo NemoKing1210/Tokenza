@@ -46,6 +46,23 @@ interface Store {
   quit: () => void;
 }
 
+/** Black or white, whichever reads on `hex`. */
+const onColor = (hex: string) => {
+  const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
+  return 0.299 * r + 0.587 * g + 0.114 * b > 150 ? "#000" : "#fff";
+};
+
+/** The Windows accent colour replaces the built-in blue (see `--sys-accent-*` in theme.css). */
+async function applyAccent() {
+  const accent = await call<{ light: string; dark: string } | null>("get_accent").catch(() => null);
+  const style = document.documentElement.style;
+  const set = (name: string, value: string | null) => (value ? style.setProperty(name, value) : style.removeProperty(name));
+  set("--sys-accent-light", accent?.light ?? null);
+  set("--sys-on-accent-light", accent ? onColor(accent.light) : null);
+  set("--sys-accent-dark", accent?.dark ?? null);
+  set("--sys-on-accent-dark", accent ? onColor(accent.dark) : null);
+}
+
 let started = false;
 let spinStarted = 0;
 let spinTimer: ReturnType<typeof setTimeout> | undefined;
@@ -76,6 +93,8 @@ export const useStore = create<Store>((set, get) => {
         return;
       }
       const { listen } = await import("@tauri-apps/api/event");
+      void applyAccent();
+      await listen("system-theme-changed", () => void applyAccent());
       await listen<AppStateDto>("usage-updated", (e) => {
         set({ data: e.payload });
         if (get().refreshing) stopSpin();

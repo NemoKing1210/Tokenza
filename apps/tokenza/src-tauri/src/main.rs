@@ -1,6 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod adaptive;
+mod autostart;
 mod hotkey;
 mod i18n;
 mod logos;
@@ -13,7 +14,7 @@ mod tray;
 mod tray_icon;
 
 use tauri::{AppHandle, Emitter, Manager, State, WindowEvent};
-use tauri_plugin_autostart::{MacosLauncher, ManagerExt};
+use tauri_plugin_autostart::MacosLauncher;
 
 use settings::Settings;
 use state::{AppState, StateDto};
@@ -31,11 +32,16 @@ fn refresh(state: State<AppState>) {
 
 #[tauri::command]
 fn set_settings(app: AppHandle, state: State<AppState>, new: Settings) -> Result<Settings, String> {
+    let old_theme = state.lock().settings.theme.clone();
     let applied = state.apply_settings(new);
     applied
         .save(&state.settings_path)
         .map_err(|e| e.to_string())?;
-    sync_autostart(&app, applied.autostart);
+    autostart::apply(&app, applied.autostart);
+    // Re-applying the acrylic flickers, so only a theme change touches it.
+    if applied.theme != old_theme {
+        apply_backdrops(&app, &applied.theme);
+    }
     // A combination another app owns leaves the hotkey unbound; `set_hotkey` is where the UI hears of it.
     let _ = hotkey::sync(&app, applied.hotkey_enabled, &applied.hotkey);
     tray::apply_language(&app);
@@ -277,28 +283,79 @@ fn open_url(url: String) -> Result<(), String> {
     cmd.arg(&url).spawn().map(|_| ()).map_err(|e| e.to_string())
 }
 
-fn sync_autostart(app: &AppHandle, want: bool) {
-    let manager = app.autolaunch();
-    let have = manager.is_enabled().unwrap_or(false);
-    // Autostart failures (policy, sandbox) must not break saving the rest of the settings.
-    if want && !have {
-        let _ = manager.enable();
-    } else if !want && have {
-        let _ = manager.disable();
+/// Windows accent colour as the two shades WinUI uses: light on dark surfaces, dark on light ones.
+#[derive(serde::Serialize)]
+struct Accent {
+    light: String,
+    dark: String,
+}
+
+#[tauri::command]
+fn get_accent() -> Option<Accent> {
+    #[cfg(windows)]
+    {
+        use winreg::{enums::HKEY_CURRENT_USER, RegKey};
+        let palette = RegKey::predef(HKEY_CURRENT_USER)
+            .open_subkey(r"Software\Microsoft\Windows\CurrentVersion\Explorer\Accent")
+            .and_then(|k| k.get_raw_value("AccentPalette"))
+            .ok()?
+            .bytes;
+        // Eight RGBA entries: light 3..1, accent, dark 1..3.
+        let hex = |i: usize| {
+            palette
+                .get(i * 4..i * 4 + 3)
+                .map(|c| format!("#{:02x}{:02x}{:02x}", c[0], c[1], c[2]))
+        };
+        Some(Accent {
+            light: hex(1)?,
+            dark: hex(4)?,
+        })
+    }
+    #[cfg(not(windows))]
+    None
+}
+
+/// Whether the app's own theme is dark: "system" follows Windows, the other two override it.
+fn is_dark(app: &AppHandle, theme: &str) -> bool {
+    match theme {
+        "light" => false,
+        "dark" => true,
+        _ => app
+            .get_webview_window("flyout")
+            .and_then(|w| w.theme().ok())
+            .is_some_and(|t| t == tauri::Theme::Dark),
     }
 }
 
-fn apply_backdrops(app: &AppHandle) {
-    #[cfg(windows)]
-    {
-        use window_vibrancy::apply_acrylic;
-        if let Some(w) = app.get_webview_window("flyout") {
-            // Failure (old Windows, disabled transparency) keeps the tinted CSS background.
-            let _ = apply_acrylic(&w, Some((243, 243, 245, 140)));
-        }
+/// Acrylic behind the flyout in the app's own theme, like the taskbar flyouts of Windows 11: there it is
+/// the DWM system backdrop, so "Transparency effects" off turns it into a solid fill by itself. With
+/// "light" chosen on a dark system (or the reverse) a backdrop that follows the system would put light
+/// cards on a dark panel, hence the explicit dark flag. The settings window gets the matching opaque
+/// fill so it does not flash white before the page has painted.
+fn apply_backdrops(app: &AppHandle, theme: &str) {
+    let dark = is_dark(app, theme);
+    if let Some(w) = app.get_webview_window("settings") {
+        let fill = if dark {
+            tauri::window::Color(44, 44, 46, 255)
+        } else {
+            tauri::window::Color(243, 243, 245, 255)
+        };
+        let _ = w.set_background_color(Some(fill));
     }
-    #[cfg(not(windows))]
-    let _ = app;
+    #[cfg(windows)]
+    if let Some(w) = app.get_webview_window("flyout") {
+        let _ = window_vibrancy::clear_mica(&w);
+        let _ = window_vibrancy::clear_acrylic(&w);
+        // Only here for its side effect of setting the window's dark-mode flag, which acrylic does not set.
+        let _ = window_vibrancy::apply_mica(&w, Some(dark));
+        let tint = if dark {
+            (32, 32, 32, 200)
+        } else {
+            (243, 243, 243, 200)
+        };
+        // Failure (old Windows, disabled transparency) keeps the tinted CSS background.
+        let _ = window_vibrancy::apply_acrylic(&w, Some(tint));
+    }
 }
 
 fn main() {
@@ -329,6 +386,7 @@ fn main() {
             hide_flyout,
             quit_app,
             about_info,
+            get_accent,
             open_url
         ])
         .setup(|app| {
@@ -337,11 +395,13 @@ fn main() {
             app.manage(AppState::new(path));
             let handle = app.handle().clone();
             handle.state::<AppState>().load_secret_cache();
-            sync_autostart(
-                &handle,
-                handle.state::<AppState>().lock().settings.autostart,
-            );
-            apply_backdrops(&handle);
+            let (want_autostart, theme) = {
+                let state = handle.state::<AppState>();
+                let g = state.lock();
+                (g.settings.autostart, g.settings.theme.clone())
+            };
+            autostart::sync_on_startup(&handle, want_autostart);
+            apply_backdrops(&handle, &theme);
             tray::setup(&handle)?;
             tray::apply_language(&handle);
             let state = handle.state::<AppState>();
@@ -362,8 +422,17 @@ fn main() {
                     tray::note_hidden(window.app_handle());
                 }
             }
-            // The marks in the per-provider tray icons follow the light or dark taskbar.
-            ("flyout", WindowEvent::ThemeChanged(_)) => tray::refresh(window.app_handle()),
+            // The marks in the per-provider tray icons follow the light or dark taskbar, and the
+            // backdrop and accent colour follow Windows when the theme is "system".
+            ("flyout", WindowEvent::ThemeChanged(_)) => {
+                let app = window.app_handle();
+                let theme = app.state::<AppState>().lock().settings.theme.clone();
+                if theme == "system" {
+                    apply_backdrops(app, &theme);
+                }
+                let _ = app.emit("system-theme-changed", ());
+                tray::refresh(app);
+            }
             // Closing settings only hides it; the app lives in the tray.
             ("settings", WindowEvent::CloseRequested { api, .. }) => {
                 api.prevent_close();
