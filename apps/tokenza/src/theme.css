@@ -1,16 +1,16 @@
 /* Tokens mirror the Figma "Tokenza/Color" collection (Light / Dark). */
 :root {
   --bg-flyout: #f3f3f5;
-  --bg-flyout-glass: rgba(243, 243, 245, 0.88);
+  --flyout-tint: rgb(243 243 243 / 0.78);
   --bg-card: #ffffff;
   --bg-track: #e4e4e8;
   --border: #e2e2e6;
   --text: #1a1a1a;
   --text-2: #5f5f66;
-  --accent: #0067c0;
+  --accent: var(--sys-accent-dark, #0067c0);
   --warning: #b86e00;
   --critical: #c42b1c;
-  --on-accent: #ffffff;
+  --on-accent: var(--sys-on-accent-dark, #ffffff);
   --shadow: rgba(0, 0, 0, 0.2);
   color-scheme: light;
 }
@@ -18,32 +18,32 @@
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme]) {
     --bg-flyout: #2c2c2e;
-    --bg-flyout-glass: rgba(44, 44, 46, 0.88);
+    --flyout-tint: rgb(24 24 26 / 0.66);
     --bg-card: #3a3a3c;
     --bg-track: #55555a;
     --border: #4a4a4e;
     --text: #ffffff;
     --text-2: #c8c8ce;
-    --accent: #60cdff;
+    --accent: var(--sys-accent-light, #60cdff);
     --warning: #ffc24d;
     --critical: #ff99a4;
-    --on-accent: #003a66;
+    --on-accent: var(--sys-on-accent-light, #003a66);
     color-scheme: dark;
   }
 }
 
 :root[data-theme="dark"] {
   --bg-flyout: #2c2c2e;
-  --bg-flyout-glass: rgba(44, 44, 46, 0.88);
+  --flyout-tint: rgb(24 24 26 / 0.66);
   --bg-card: #3a3a3c;
   --bg-track: #55555a;
   --border: #4a4a4e;
   --text: #ffffff;
   --text-2: #c8c8ce;
-  --accent: #60cdff;
+  --accent: var(--sys-accent-light, #60cdff);
   --warning: #ffc24d;
   --critical: #ff99a4;
-  --on-accent: #003a66;
+  --on-accent: var(--sys-on-accent-light, #003a66);
   color-scheme: dark;
 }
 
@@ -62,7 +62,10 @@ body {
 }
 
 /* The flyout window is transparent so the acrylic backdrop shows through the glass tint. */
-:root[data-view="flyout"], :root[data-view="flyout"] body { background: transparent; }
+/* The tint sits on the page itself, not on .flyout: while the window is a little taller than the content
+   (the shrink waits for the morph) the rest would otherwise show the bare, untinted acrylic as a strip. */
+:root[data-view="flyout"] { background: var(--flyout-tint); }
+:root[data-view="flyout"] body { background: transparent; }
 /* More providers than fit the screen scroll with the wheel or touch; the scrollbar itself stays out of sight. */
 :root[data-view="flyout"] { overflow-x: hidden; overflow-y: auto; scrollbar-width: none; overscroll-behavior: contain; }
 :root[data-view="flyout"]::-webkit-scrollbar { display: none; }
@@ -83,13 +86,10 @@ button:focus-visible, .seg:focus-visible { outline: 2px solid var(--accent); out
   flex-direction: column;
   gap: 8px;
   padding: 14px 16px 12px;
-  background: var(--bg-flyout-glass);
-  border: 1px solid var(--border);
-  border-radius: 8px;
+  /* No border or radius: the window already has the DWM border and rounded corners, a second one shows as a double border.
+     The tint (the shell's dark/light base over the blur) is on the page root. */
 }
 
-.flyout-head { display: flex; align-items: center; justify-content: space-between; }
-.flyout-head h1 { font-size: 15px; font-weight: 700; }
 
 .link-btn {
   display: inline-flex; align-items: center; gap: 6px;
@@ -162,7 +162,7 @@ button:focus-visible, .seg:focus-visible { outline: 2px solid var(--accent); out
 }
 
 .flyout-foot {
-  display: flex; align-items: center; justify-content: flex-end;
+  display: flex; align-items: center; gap: 4px;
   font-size: 11px; color: var(--text-2);
 }
 .icon-btn {
@@ -170,6 +170,7 @@ button:focus-visible, .seg:focus-visible { outline: 2px solid var(--accent); out
   width: 28px; height: 28px; border-radius: 4px;
   background: none; border: 0; color: var(--text-2);
 }
+.flyout-foot .spacer { flex: 1; }
 .icon-btn:hover:not(:disabled) { background: var(--bg-track); }
 .icon-btn:disabled { opacity: 0.35; cursor: default; }
 
@@ -220,9 +221,7 @@ button:focus-visible, .seg:focus-visible { outline: 2px solid var(--accent); out
 .seg-on { background: var(--bg-card); font-weight: 600; }
 
 /* ---------- Compact view ---------- */
-.head-actions { display: flex; align-items: center; gap: 4px; }
 .flyout-compact { gap: 6px; padding: 10px 12px 8px; }
-.flyout-compact .flyout-head h1 { font-size: 14px; }
 
 .ccard {
   display: flex; flex-direction: column; gap: 6px;

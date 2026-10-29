@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed
+
+- The flyout uses the Windows 11 acrylic backdrop in the app's own theme (also when "light" or "dark" differs from the system) and takes the Windows accent colour. The title is gone and its buttons moved to the bottom row.
+
+### Fixed
+
+- "Start with Windows" now repairs a stale path left by a moved, reinstalled or dev build, and `tauri dev` no longer registers a debug executable for login.
+- The settings window no longer flashes white on a dark theme while it loads.
+- A usage bar at 0% no longer shows a sliver of colour.
+
 ## [0.1.2] - 2026-10-22
 
 ### Fixed

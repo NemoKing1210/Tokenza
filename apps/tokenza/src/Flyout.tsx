@@ -68,7 +68,7 @@ function PercentRow({ w, pctValue, label, lang, now }: { w: UsageWindow; pctValu
         aria-valuemax={100}
         aria-valuenow={Math.round(pct)}
       >
-        <div className={`fill tone-${tone}`} style={{ width: `${Math.max(pct, 1)}%` }} />
+        <div className={`fill tone-${tone}`} style={{ width: `${pct > 0 ? Math.max(pct, 1) : 0}%` }} />
       </div>
       <div className="usage-reset">{formatReset(w.resets_at, now, lang, w.kind === "Monthly")}</div>
     </div>
@@ -192,7 +192,7 @@ function CompactRow({ w, lang, now }: { w: UsageWindow; lang: Lang; now: number 
         aria-valuemax={100}
         aria-valuenow={Math.round(pct)}
       >
-        <div className={`fill tone-${toneFor(pct)}`} style={{ width: `${Math.max(pct, 1)}%` }} />
+        <div className={`fill tone-${toneFor(pct)}`} style={{ width: `${pct > 0 ? Math.max(pct, 1) : 0}%` }} />
       </div>
       <span className="crow-pct">{Math.round(shown)}%</span>
       <span className="crow-reset">{left !== null && left > 0 ? formatDuration(left, lang) : ""}</span>
@@ -342,29 +342,6 @@ export default function Flyout() {
       data-enter={flyout.enter % 2 ? "a" : "b"}
       style={{ viewTransitionName: "flyout" } as CSSProperties}
     >
-      <header className="flyout-head stagger" style={{ "--i": 0 } as CSSProperties}>
-        <h1>Tokenza</h1>
-        <div className="head-actions">
-          <button
-            className="icon-btn"
-            onClick={() => saveSettings({ view_mode: compact ? "standard" : "compact" })}
-            aria-label={toggleLabel}
-            title={toggleLabel}
-          >
-            <DensityIcon compact={compact} />
-          </button>
-          <button
-            className={refreshing ? "icon-btn is-spinning" : "icon-btn"}
-            onClick={refresh}
-            aria-label={t(lang, "refresh")}
-            title={t(lang, "refresh")}
-            aria-busy={refreshing}
-          >
-            <RefreshIcon />
-          </button>
-        </div>
-      </header>
-
       {data && visible.length === 0 && <div className="card-note">{t(lang, "empty")}</div>}
       {visible.map((p, i) =>
         compact ? (
@@ -374,7 +351,25 @@ export default function Flyout() {
         ),
       )}
 
-      <footer className="flyout-foot stagger" style={{ "--i": visible.length + 1 } as CSSProperties}>
+      <footer className="flyout-foot stagger" style={{ "--i": visible.length } as CSSProperties}>
+        <button
+          className="icon-btn"
+          onClick={() => saveSettings({ view_mode: compact ? "standard" : "compact" })}
+          aria-label={toggleLabel}
+          title={toggleLabel}
+        >
+          <DensityIcon compact={compact} />
+        </button>
+        <span className="spacer" />
+        <button
+          className={refreshing ? "icon-btn is-spinning" : "icon-btn"}
+          onClick={refresh}
+          aria-label={t(lang, "refresh")}
+          title={t(lang, "refresh")}
+          aria-busy={refreshing}
+        >
+          <RefreshIcon />
+        </button>
         <button className="icon-btn" onClick={openSettings} aria-label={t(lang, "settings")} title={t(lang, "settings")}>
           <GearIcon />
         </button>
