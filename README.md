@@ -18,8 +18,8 @@ A lightweight Windows tray app for Claude Code, Codex, Cursor and more.
 <br>
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/flyout-dark.png">
-  <img src="docs/screenshots/flyout-light.png" alt="The Tokenza flyout with one card per provider" width="360">
+  <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/flyout-compact-dark.png">
+  <img src="docs/screenshots/flyout-compact-light.png" alt="The Tokenza flyout with one card per provider" width="360">
 </picture>
 
 </div>
