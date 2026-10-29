@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-29
+
 ### Changed
 
 - The flyout uses the Windows 11 acrylic backdrop in the app's own theme (also when "light" or "dark" differs from the system) and takes the Windows accent colour. The title is gone and its buttons moved to the bottom row.
