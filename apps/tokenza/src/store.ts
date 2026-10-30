@@ -34,6 +34,8 @@ interface Store {
   /** Each credential action resolves to an error code from the backend, or null on success. */
   setSecret: (id: string, field: string, value: string) => Promise<string | null>;
   clearSecret: (id: string, field: string) => Promise<string | null>;
+  /** Opens the Command Code sign-in page and stores the key it returns. */
+  commandCodeLogin: () => Promise<string | null>;
   saveCustom: (def: CustomDef, token: string | null) => Promise<string | null>;
   removeCustom: (id: string) => Promise<string | null>;
   /** Resolves to an error code from the backend ("invalid", "in_use"), or null on success. */
@@ -159,6 +161,11 @@ export const useStore = create<Store>((set, get) => {
     async clearSecret(id, field) {
       if (!inTauri) return demoSecret(set, get, id, field, false);
       return attempt(() => call("clear_provider_secret", { id, field }));
+    },
+
+    async commandCodeLogin() {
+      if (!inTauri) return demoSecret(set, get, "commandcode", "api_key", true);
+      return attempt(() => call("commandcode_login"));
     },
 
     async saveCustom(def, token) {

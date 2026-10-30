@@ -2,6 +2,7 @@
 
 mod adaptive;
 mod autostart;
+mod commandcode_auth;
 mod hotkey;
 mod i18n;
 mod logos;
@@ -377,6 +378,7 @@ fn main() {
             reset_tuning,
             set_provider_secret,
             clear_provider_secret,
+            commandcode_auth::commandcode_login,
             save_custom_provider,
             test_custom_provider,
             remove_custom_provider,

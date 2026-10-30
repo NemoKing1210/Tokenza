@@ -97,6 +97,49 @@ function SecretField({ id, field, isSet, lang }: { id: string; field: string; is
   );
 }
 
+function signInError(lang: Lang, raw: string): string {
+  const code = raw.replace(/^Error:\s*/, "").split(":")[0].trim();
+  if (code === "denied") return t(lang, "commandcodeSignInDenied");
+  if (code === "timeout") return t(lang, "commandcodeSignInTimeout");
+  if (code === "invalid_key") return t(lang, "commandcodeSignInInvalid");
+  if (code === "too_long") return t(lang, "secretErrLong");
+  if (code.startsWith("store_failed")) return t(lang, "secretErrStore");
+  return t(lang, "commandcodeSignInFailed");
+}
+
+/** The Command Code Studio sign-in: the browser confirms, Tokenza keeps the key. */
+function BrowserSignIn({ lang }: { lang: Lang }) {
+  const login = useStore((s) => s.commandCodeLogin);
+  const refresh = useStore((s) => s.refresh);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const start = async () => {
+    setBusy(true);
+    setError(null);
+    const failure = await login();
+    setBusy(false);
+    if (failure) setError(signInError(lang, failure));
+    else refresh();
+  };
+
+  return (
+    <div className="dline dline-wrap">
+      <div className="dline-text">
+        <div className="dline-title">{t(lang, "commandcodeSignIn")}</div>
+        <div className={error ? "dline-hint dline-error" : "dline-hint"} role={error ? "alert" : undefined}>
+          {busy ? t(lang, "commandcodeSigningIn") : (error ?? t(lang, "commandcodeSignInHint"))}
+        </div>
+      </div>
+      <div className="secret-ctl">
+        <button className="btn btn-sm btn-accent" type="button" disabled={busy} onClick={() => void start()}>
+          {t(lang, "commandcodeSignIn")}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 /** Credentials typed into the app for one provider, kept in the OS credential store. */
 export function ConnectSection({ id, secrets, lang }: { id: string; secrets: string[]; lang: Lang }) {
   const fields = secretFieldsFor(id);
@@ -107,6 +150,7 @@ export function ConnectSection({ id, secrets, lang }: { id: string; secrets: str
       <div className="dline-title">{t(lang, "provConnect")}</div>
       <div className="dline-hint">{t(lang, hint)}</div>
       <div className="dline-hint">{t(lang, "provConnectStore")}</div>
+      {id === "commandcode" && <BrowserSignIn lang={lang} />}
       {fields.map((f) => (
         <SecretField key={f} id={id} field={f} isSet={secrets.includes(f)} lang={lang} />
       ))}

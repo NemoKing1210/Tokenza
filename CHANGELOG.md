@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- Command Code can be connected from Settings → Providers without copying a key: Tokenza opens Command Code Studio in the browser, you confirm the sign-in, and the key is kept in Windows Credential Manager. The CLI's `auth.json` is not modified.
+
+### Fixed
+
+- Command Code limits survive the current billing payload: the rolling windows are read from either side of the credit ledger, the plan id is taken from the ledger when the subscription omits it, and plan revisions such as `individual-goat-v2` keep their tier and monthly allowance.
+
 ## [0.2.0] - 2026-10-29
 
 ### Changed

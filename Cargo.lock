@@ -4497,6 +4497,7 @@ name = "tokenza-app"
 version = "0.2.0"
 dependencies = [
  "chrono",
+ "getrandom 0.3.4",
  "keyring",
  "serde",
  "serde_json",

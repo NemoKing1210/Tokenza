@@ -93,7 +93,7 @@ Tokenza is built to be easy to audit:
 | Codex        | `chatgpt.com`                  | `~/.codex/auth.json`                                                                        |
 | Cursor       | `cursor.com`                   | Cursor's local `state.vscdb` (opened read-only)                                             |
 | OpenCode Go  | `opencode.ai`                  | The `opencode` CLI's login in `~/.local/share/opencode/opencode.db` (opened read-only)      |
-| Command Code | `api.commandcode.ai`           | `~/.commandcode/auth.json` (or `COMMAND_CODE_API_KEY`)                                      |
+| Command Code | `api.commandcode.ai`, `commandcode.ai` | `~/.commandcode/auth.json`, `COMMAND_CODE_API_KEY`, or the in-app browser sign-in (Credential Manager) |
 | Devin        | `server.codeium.com`           | `%APPDATA%\Devin\credentials.toml` (the CLI's API key)                                      |
 | Antigravity  | `cloudcode-pa.googleapis.com`  | `~/.gemini/antigravity-cli/antigravity-oauth-token` (read-only; unverified, see below)      |
 
@@ -126,7 +126,8 @@ Signed in to the `opencode` CLI (`opencode auth login`, or the console login of 
 
 Some providers need a key that no agent stores locally, and you can also add services Tokenza does not know (**Settings → Providers → Add provider**: a name, an HTTPS URL, how to authenticate, and the JSON paths of the numbers to show).
 
-- What you type is kept in the **Windows Credential Manager** under the name "Tokenza", never in `settings.json`, and is never shown again (you can replace or remove it).
+- What you type, and the key Command Code Studio returns from the in-app browser sign-in, is kept in the **Windows Credential Manager** under the name "Tokenza", never in `settings.json`, and is never shown again (you can replace or remove it).
+- The Command Code sign-in opens `commandcode.ai` in your browser and asks you to confirm; Tokenza never reads or changes the CLI's `auth.json`.
 - Tokenza reads it into memory only while building a request, like the logins it reads from the agents.
 - A custom provider only ever talks to the single HTTPS URL you entered, sends the token only there, and does not follow redirects. Custom providers add no domain to the list above; the one you configure is the only one contacted. The form's quick-fill buttons (OpenRouter, Synthetic) only pre-fill that URL and the JSON paths; nothing is contacted until you save the provider or press **Test**, which sends the one request to the URL in the form and stores nothing.
 

@@ -31,7 +31,7 @@ Everything that knows about a specific AI agent lives here, and nothing here kno
 ### User-entered credentials and custom providers
 
 - `secrets.rs` (core) is a small hook: the host installs a `SecretSource`, and providers ask it for values the user typed (`secrets::get(provider, field)`). The core never stores anything.
-- `tokenza-app` implements that source with the OS credential store (`keyring`; Windows Credential Manager, entries named `Tokenza` / `<provider>/<field>`). `settings.json` holds only the *definitions* of custom providers, never their tokens, and the UI only learns which fields have a value.
+- `tokenza-app` implements that source with the OS credential store (`keyring`; Windows Credential Manager, entries named `Tokenza` / `<provider>/<field>`). `settings.json` holds only the *definitions* of custom providers, never their tokens, and the UI only learns which fields have a value. The Command Code browser sign-in stores the key it receives the same way; the CLI's `auth.json` is never touched.
 - `providers/custom.rs` turns a `CustomDef` (HTTPS URL, auth scheme, JSON paths per limit window) into a `Provider`. Definitions are validated on every load and save (HTTPS only, no URL credentials, bounded sizes) and the HTTP client refuses redirects so a token cannot be forwarded elsewhere.
 - The scheduler rebuilds the list of custom providers whenever their definitions change. Definitions only change through the `save_custom_provider` / `remove_custom_provider` commands, not through `set_settings`.
 
@@ -40,6 +40,7 @@ Everything that knows about a specific AI agent lives here, and nothing here kno
 | Module        | Responsibility                                                                    |
 |---------------|-----------------------------------------------------------------------------------|
 | `main.rs`     | Tauri setup, IPC commands, single-instance handling, autostart, window events    |
+| `commandcode_auth.rs` | Command Code browser sign-in: opens Studio, receives its key on a loopback callback, validates it and saves it in the credential store |
 | `scheduler.rs`| Background loop; polls each provider on its own schedule and publishes results   |
 | `adaptive.rs` | Smart polling: backs off after rate-limit answers, speeds up near a limit, slows when idle |
 | `state.rs`    | Shared application state and the DTO sent to the UI; keeps the last good snapshots in `snapshots.json` (limits and account label, no credentials) |
