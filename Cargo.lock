@@ -4494,7 +4494,7 @@ checksum = "fd3ca314f692efd6c868f8408f53fe444634a845f96c028b97d35f6a1f79f0ee"
 
 [[package]]
 name = "tokenza-app"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "chrono",
  "getrandom 0.3.4",
@@ -4518,7 +4518,7 @@ dependencies = [
 
 [[package]]
 name = "tokenza-cli"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "serde_json",
  "tokenza-core",
@@ -4527,7 +4527,7 @@ dependencies = [
 
 [[package]]
 name = "tokenza-core"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "async-trait",
  "base64 0.22.1",

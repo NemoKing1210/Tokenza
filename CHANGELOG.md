@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-31
+
 ### Added
 
 - Command Code can be connected from Settings → Providers without copying a key: Tokenza opens Command Code Studio in the browser, you confirm the sign-in, and the key is kept in Windows Credential Manager. The CLI's `auth.json` is not modified.
