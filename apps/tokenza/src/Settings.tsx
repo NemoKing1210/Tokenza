@@ -1,4 +1,4 @@
-import { useState, useSyncExternalStore, type CSSProperties, type KeyboardEvent, type ReactNode } from "react";
+import { useEffect, useState, useSyncExternalStore, type CSSProperties, type KeyboardEvent, type ReactNode } from "react";
 import { FluentProvider, Select, Switch, webDarkTheme, webLightTheme } from "@fluentui/react-components";
 import { selectLang, useStore } from "./store";
 import { LANGS, t, type Key, type LangSetting } from "./i18n";
@@ -144,9 +144,13 @@ function HotkeyRow({ lang, s }: { lang: Lang; s: Settings }) {
 
 export default function SettingsView() {
   const data = useStore((s) => s.data);
+  const providerSettings = useStore((s) => s.providerSettings);
   const { saveSettings, quit } = useStore.getState();
   const [section, setSection] = useState<Section>("providers");
   const systemDark = useSystemDark();
+  useEffect(() => {
+    if (providerSettings) setSection("providers");
+  }, [providerSettings]);
   if (!data) return null;
   const { settings: s } = data;
   const lang = selectLang(data);

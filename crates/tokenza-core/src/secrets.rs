@@ -28,7 +28,7 @@ pub fn get(provider: &str, field: &str) -> Option<String> {
 /// Fields the user may fill in for a built-in provider, in display order.
 pub fn builtin_fields(provider: &str) -> &'static [&'static str] {
     match provider {
-        "opencode" => &["workspace_id", "cookie"],
+        "opencode" => &["api_key", "workspace_id", "cookie"],
         "commandcode" => &["api_key"],
         _ => &[],
     }

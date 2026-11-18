@@ -1,11 +1,7 @@
 //! OpenCode Go: subscription meters of the OpenCode Go plan.
 //!
-//! The `opencode` CLI keeps its console login (an OAuth access token) in `opencode.db`, and
-//! older versions kept the Go API key in `auth.json`. Either one is accepted as a bearer token
-//! by `/zen/go/v1/usage`, so a signed-in CLI needs no setup. Reading the browser's cookie jar is
-//! off the table; the console session cookie plus workspace id (typed into Tokenza's provider
-//! settings or set through environment variables) stays as a fallback for machines without a
-//! CLI login.
+//! Reads Go usage using an explicit API key or the CLI's local credentials. Existing
+//! workspace-and-cookie configurations remain available as a fallback.
 
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -15,12 +11,13 @@ use chrono::Utc;
 use rusqlite::{Connection, OpenFlags};
 use serde_json::Value;
 
-use super::{body_json, home, http, number, read_json, timestamp};
+use super::{body_json, home, http_no_redirect, number, read_json, timestamp};
 use crate::error::check_response;
 use crate::{secrets, Account, Provider, ProviderError, UsageSnapshot, UsageWindow, WindowKind};
 
 const USAGE_URL: &str = "https://opencode.ai/zen/go/v1/usage";
 const STATUS_URL: &str = "https://opencode.ai/console/api/go/status";
+const API_KEY_VAR: &str = "OPENCODE_GO_API_KEY";
 const WORKSPACE_VAR: &str = "OPENCODE_GO_WORKSPACE_ID";
 const COOKIE_VAR: &str = "OPENCODE_GO_AUTH_COOKIE";
 const COOKIE_NAME: &str = "__Host-console_session";
@@ -74,21 +71,29 @@ fn credentials() -> Option<(String, String)> {
 /// What the `opencode` CLI has stored locally.
 struct CliLogin {
     token: String,
+    workspace: Option<String>,
     /// The CLI refreshes its own token when it runs; we never write to its files, so a lapsed
     /// one is reported rather than renewed.
     expired: bool,
 }
 
 fn data_dir() -> Option<PathBuf> {
-    Some(home()?.join(".local").join("share").join("opencode"))
+    let root = std::env::var_os("XDG_DATA_HOME")
+        .map(PathBuf::from)
+        .filter(|path| path.is_absolute())
+        .or_else(|| home().map(|path| path.join(".local").join("share")))?;
+    Some(root.join("opencode"))
+}
+
+fn database_path(dir: &Path) -> PathBuf {
+    let name = std::env::var_os("OPENCODE_DB")
+        .filter(|value| !value.is_empty())
+        .unwrap_or_else(|| "opencode.db".into());
+    dir.join(name)
 }
 
 /// The console login from `opencode.db`, opened read-only because the CLI keeps it open.
-fn db_login(dir: &Path) -> Option<CliLogin> {
-    let path = dir.join("opencode.db");
-    if !path.exists() {
-        return None;
-    }
+fn db_login(path: &Path) -> Option<CliLogin> {
     let conn = Connection::open_with_flags(
         path,
         OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX,
@@ -97,22 +102,45 @@ fn db_login(dir: &Path) -> Option<CliLogin> {
     conn.busy_timeout(Duration::from_secs(2)).ok()?;
     let raw: String = conn
         .query_row(
-            "SELECT value FROM credential WHERE integration_id = 'opencode' \
-             ORDER BY active DESC, time_updated DESC LIMIT 1",
+            "SELECT value FROM credential WHERE integration_id IN ('opencode-go', 'opencode') \
+             AND (active = 1 OR active IS NULL) \
+             ORDER BY integration_id = 'opencode-go' DESC, active DESC, time_updated DESC LIMIT 1",
             [],
             |r| r.get(0),
         )
         .ok()?;
-    let v: Value = serde_json::from_str(&raw).ok()?;
-    let token = v.get("access")?.as_str()?.trim().to_string();
+    parse_db_login(&serde_json::from_str(&raw).ok()?)
+}
+
+fn parse_db_login(v: &Value) -> Option<CliLogin> {
+    // A private Console's token must stay on the server it was issued for.
+    let server = v.pointer("/metadata/server").and_then(Value::as_str);
+    if server.is_some_and(|server| {
+        !matches!(
+            server.trim_end_matches('/'),
+            "https://opencode.ai/console" | "https://opencode.ai" | "https://console.opencode.ai"
+        )
+    }) {
+        return None;
+    }
+    let (field, expiry) = match v.get("type")?.as_str()? {
+        "oauth" => ("access", v.get("expires").and_then(timestamp)),
+        "key" => ("key", None),
+        _ => return None,
+    };
+    let token = v.get(field)?.as_str()?.trim().to_string();
     if token.is_empty() {
         return None;
     }
-    let expired = v
-        .get("expires")
-        .and_then(timestamp)
-        .is_some_and(|t| t <= Utc::now());
-    Some(CliLogin { token, expired })
+    let workspace = v
+        .pointer("/metadata/orgID")
+        .and_then(Value::as_str)
+        .map(str::to_owned);
+    Some(CliLogin {
+        token,
+        workspace,
+        expired: expiry.is_some_and(|t| t <= Utc::now()),
+    })
 }
 
 /// The Go API key an older CLI left in `auth.json`.
@@ -126,13 +154,17 @@ fn auth_json_login(dir: &Path) -> Option<CliLogin> {
         .to_string();
     (!key.is_empty()).then_some(CliLogin {
         token: key,
+        workspace: None,
         expired: false,
     })
 }
 
 fn cli_login() -> Option<CliLogin> {
     let dir = data_dir()?;
-    db_login(&dir).or_else(|| auth_json_login(&dir))
+    match db_login(&database_path(&dir)) {
+        Some(login) if login.expired => auth_json_login(&dir).or(Some(login)),
+        login => login.or_else(|| auth_json_login(&dir)),
+    }
 }
 
 #[async_trait]
@@ -146,21 +178,39 @@ impl Provider for OpenCode {
     }
 
     fn detect(&self) -> Option<Account> {
-        if credentials().is_none() && cli_login().is_none() {
+        if setting("api_key", API_KEY_VAR).is_none()
+            && cli_login().is_none()
+            && credentials().is_none()
+        {
             return None;
         }
         Some(Account { label: "go".into() })
     }
 
     async fn fetch(&self, acc: &Account) -> Result<UsageSnapshot, ProviderError> {
-        let windows = match cli_login() {
-            Some(login) => {
-                if login.expired {
-                    return Err(ProviderError::TokenExpired);
+        let windows = if let Some(key) = setting("api_key", API_KEY_VAR) {
+            // An explicit key selects an account. Report its result even when a CLI login exists.
+            fetch_usage(&key, None).await?
+        } else {
+            let login = tokio::task::spawn_blocking(cli_login).await.ok().flatten();
+            let cli = match login {
+                Some(login) if !login.expired => {
+                    fetch_usage(&login.token, login.workspace.as_deref()).await
                 }
-                fetch_usage(&login.token).await?
+                Some(_) => Err(ProviderError::TokenExpired),
+                None => Err(ProviderError::NotLoggedIn),
+            };
+            match cli {
+                Err(
+                    ProviderError::TokenExpired
+                    | ProviderError::NotLoggedIn
+                    | ProviderError::NoSubscription,
+                ) => match credentials() {
+                    Some((workspace, cookie)) => fetch_console(&workspace, &cookie).await?,
+                    None => cli?,
+                },
+                _ => cli?,
             }
-            None => fetch_console().await?,
         };
         Ok(UsageSnapshot {
             provider: self.id().into(),
@@ -172,12 +222,18 @@ impl Provider for OpenCode {
     }
 }
 
-/// `/zen/go/v1/usage`, authenticated with the CLI's token.
-async fn fetch_usage(token: &str) -> Result<Vec<UsageWindow>, ProviderError> {
-    let resp = http()?.get(USAGE_URL).bearer_auth(token).send().await?;
-    // A valid login on a workspace without Go answers 403 (`EntitlementError`).
-    if resp.status().as_u16() == 403 {
-        return Err(ProviderError::NoSubscription);
+/// `/zen/go/v1/usage`, authenticated with a Go API key or Console access token.
+async fn fetch_usage(
+    token: &str,
+    workspace: Option<&str>,
+) -> Result<Vec<UsageWindow>, ProviderError> {
+    let mut request = http_no_redirect()?.get(USAGE_URL).bearer_auth(token);
+    if let Some(workspace) = workspace {
+        request = request.header("x-org-id", workspace);
+    }
+    let resp = request.send().await?;
+    if resp.status() == reqwest::StatusCode::FORBIDDEN {
+        return Err(forbidden_usage(&body_json(resp).await?));
     }
     check_response(&resp)?;
     let windows = parse_usage(&body_json(resp).await?);
@@ -187,13 +243,20 @@ async fn fetch_usage(token: &str) -> Result<Vec<UsageWindow>, ProviderError> {
     Ok(windows)
 }
 
+fn forbidden_usage(body: &Value) -> ProviderError {
+    match body.pointer("/error/type").and_then(Value::as_str) {
+        Some("EntitlementError") => ProviderError::NoSubscription,
+        Some("AuthError") => ProviderError::TokenExpired,
+        _ => ProviderError::SchemaChanged("unexpected HTTP 403".into()),
+    }
+}
+
 /// The console status endpoint, authenticated with a pasted session cookie.
-async fn fetch_console() -> Result<Vec<UsageWindow>, ProviderError> {
-    let (workspace, cookie) = credentials().ok_or(ProviderError::NotLoggedIn)?;
-    let resp = http()?
+async fn fetch_console(workspace: &str, cookie: &str) -> Result<Vec<UsageWindow>, ProviderError> {
+    let resp = http_no_redirect()?
         .get(STATUS_URL)
         .header("x-org-id", workspace)
-        .header("Cookie", cookie_header(&cookie))
+        .header("Cookie", cookie_header(cookie))
         .send()
         .await?;
     // The console answers 400 when the workspace id is missing or not one of the account's.
@@ -226,7 +289,7 @@ fn parse_usage(body: &Value) -> Vec<UsageWindow> {
         let Some(m) = body.pointer(&format!("/usage/{key}")) else {
             continue;
         };
-        let Some(pct) = m.get("percent").and_then(number) else {
+        let Some(pct) = m.get("percent").and_then(number).filter(|n| n.is_finite()) else {
             continue;
         };
         let limited = m.get("status").and_then(Value::as_str) == Some("rate-limited");
@@ -323,6 +386,34 @@ mod tests {
     }
 
     #[test]
+    fn distinguishes_forbidden_authentication_from_missing_plan() {
+        let body = |kind| serde_json::json!({"type": "error", "error": {"type": kind}});
+        assert_eq!(forbidden_usage(&body("AuthError")).kind(), "TokenExpired");
+        assert_eq!(
+            forbidden_usage(&body("EntitlementError")).kind(),
+            "NoSubscription"
+        );
+        assert_eq!(
+            forbidden_usage(&body("UnexpectedError")).kind(),
+            "SchemaChanged"
+        );
+    }
+
+    #[test]
+    fn cli_login_is_scoped_to_the_public_console_and_workspace() {
+        let value = |server| {
+            serde_json::json!({
+                "type": "oauth",
+                "access": "fake-token",
+                "metadata": {"server": server, "orgID": "wrk_TEST"}
+            })
+        };
+        let login = parse_db_login(&value("https://opencode.ai/console")).unwrap();
+        assert_eq!(login.workspace.as_deref(), Some("wrk_TEST"));
+        assert!(parse_db_login(&value("https://private-console.example")).is_none());
+    }
+
+    #[test]
     fn reads_login_from_cli_database() {
         let dir = std::env::temp_dir().join(format!("tokenza-oc-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
@@ -340,7 +431,7 @@ mod tests {
         )
         .unwrap();
         drop(conn);
-        let login = db_login(&dir).unwrap();
+        let login = db_login(&dir.join("opencode.db")).unwrap();
         assert_eq!(login.token, "fake-token");
         assert!(!login.expired);
 
@@ -348,7 +439,23 @@ mod tests {
         conn.execute("UPDATE credential SET value = ?1", [value(1_000)])
             .unwrap();
         drop(conn);
-        assert!(db_login(&dir).unwrap().expired);
+        assert!(db_login(&dir.join("opencode.db")).unwrap().expired);
+
+        let conn = Connection::open(dir.join("opencode.db")).unwrap();
+        conn.execute(
+            "INSERT INTO credential VALUES ('2', 'opencode-go', ?1, NULL, 2)",
+            [r#"{"type":"key","key":"fake-go-key"}"#],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO credential VALUES ('3', 'opencode-go', ?1, 0, 3)",
+            [r#"{"type":"key","key":"fake-inactive-key"}"#],
+        )
+        .unwrap();
+        drop(conn);
+        let login = db_login(&dir.join("opencode.db")).unwrap();
+        assert_eq!(login.token, "fake-go-key");
+        assert!(!login.expired);
         std::fs::remove_dir_all(&dir).ok();
     }
 

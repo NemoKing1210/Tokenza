@@ -1,4 +1,17 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { inTauri } from "./store";
+
+export function ExternalLink({ url, children }: { url: string; children: string }) {
+  return (
+    <a className="link-btn" href={url} target="_blank" rel="noopener noreferrer" onClick={(event) => {
+      if (!inTauri) return;
+      event.preventDefault();
+      void import("@tauri-apps/api/core").then(({ invoke }) => invoke("open_url", { url })).catch(() => {});
+    }}>
+      {children}
+    </a>
+  );
+}
 
 export function Row({ title, hint, children }: { title: string; hint?: string; children: ReactNode }) {
   return (

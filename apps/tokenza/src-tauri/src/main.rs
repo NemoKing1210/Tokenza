@@ -32,6 +32,11 @@ fn refresh(state: State<AppState>) {
 }
 
 #[tauri::command]
+async fn check_opencode(app: AppHandle) -> Result<(), &'static str> {
+    scheduler::check_opencode(&app).await
+}
+
+#[tauri::command]
 fn set_settings(app: AppHandle, state: State<AppState>, new: Settings) -> Result<Settings, String> {
     let old_theme = state.lock().settings.theme.clone();
     let applied = state.apply_settings(new);
@@ -238,8 +243,11 @@ fn set_flyout_height(app: AppHandle, height: f64) {
 }
 
 #[tauri::command]
-fn open_settings(app: AppHandle) {
+fn open_settings(app: AppHandle, provider: Option<String>) {
     tray::open_settings(&app);
+    if let Some(provider) = provider {
+        let _ = app.emit_to("settings", "provider-settings", provider);
+    }
 }
 
 #[tauri::command]
@@ -252,7 +260,7 @@ fn quit_app(app: AppHandle) {
     app.exit(0);
 }
 
-/// Links the About page may open. Anything else is refused, so the web view cannot be used to
+/// Links the UI may open. Anything else is refused, so the web view cannot be used to
 /// launch arbitrary addresses.
 const ALLOWED_LINK_PREFIX: &str = "https://github.com/NemoKing1210/";
 
@@ -272,7 +280,13 @@ fn about_info() -> AboutInfo {
 
 #[tauri::command]
 fn open_url(url: String) -> Result<(), String> {
-    if !url.starts_with(ALLOWED_LINK_PREFIX) || url.chars().any(|c| c.is_whitespace() || c == '"') {
+    let allowed = url.starts_with(ALLOWED_LINK_PREFIX)
+        || matches!(
+            url.as_str(),
+            "https://opencode.ai/console"
+                | "https://opencode.ai/docs/console/api/#personal-api-keys"
+        );
+    if !allowed || url.chars().any(|c| c.is_whitespace() || c == '"') {
         return Err("link not allowed".into());
     }
     #[cfg(windows)]
@@ -373,6 +387,7 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             get_state,
             refresh,
+            check_opencode,
             set_settings,
             set_hotkey,
             reset_tuning,

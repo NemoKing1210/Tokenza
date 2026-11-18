@@ -92,7 +92,7 @@ Tokenza is built to be easy to audit:
 | Claude Code  | `api.anthropic.com`            | `~/.claude/.credentials.json`                                                               |
 | Codex        | `chatgpt.com`                  | `~/.codex/auth.json`                                                                        |
 | Cursor       | `cursor.com`                   | Cursor's local `state.vscdb` (opened read-only)                                             |
-| OpenCode Go  | `opencode.ai`                  | The `opencode` CLI's login in `~/.local/share/opencode/opencode.db` (opened read-only)      |
+| OpenCode Go  | `opencode.ai`                  | A Go API key or the `opencode` CLI's local credentials (opened read-only)                   |
 | Command Code | `api.commandcode.ai`, `commandcode.ai` | `~/.commandcode/auth.json`, `COMMAND_CODE_API_KEY`, or the in-app browser sign-in (Credential Manager) |
 | Devin        | `server.codeium.com`           | `%APPDATA%\Devin\credentials.toml` (the CLI's API key)                                      |
 | Antigravity  | `cloudcode-pa.googleapis.com`  | `~/.gemini/antigravity-cli/antigravity-oauth-token` (read-only; unverified, see below)      |
@@ -115,7 +115,11 @@ Devin's daily and weekly quota is read with the API key the Devin CLI keeps in `
 
 <br>
 
-Signed in to the `opencode` CLI (`opencode auth login`, or the console login of a recent version)? Then there is nothing to set up: Tokenza reads the CLI's login token read-only from `opencode.db` (or the Go key in an older `auth.json`) and sends it to `opencode.ai/zen/go/v1/usage`. It never refreshes the token; if it has lapsed, run the CLI once. Without a CLI login, Tokenza never touches your browser's cookies; instead, open the OpenCode card in **Settings → Providers** and enter the workspace ID (the `wrk_…` part of `opencode.ai/workspace/wrk_…/go`) and the value of the `__Host-console_session` cookie, copied from your browser's developer tools. The `OPENCODE_GO_WORKSPACE_ID` and `OPENCODE_GO_AUTH_COOKIE` environment variables work too. The cookie expires eventually; replace it when the card asks you to sign in again.
+If you already connected Go in OpenCode using `/connect`, Tokenza reads its local credentials from `opencode.db` or `auth.json`. It respects `XDG_DATA_HOME` and `OPENCODE_DB`. If your CLI login expires, reconnect in OpenCode and click **Check connection** under **Settings → Providers → OpenCode**.
+
+You can also connect directly in Tokenza. In [OpenCode Console](https://opencode.ai/console), open **Account → Personal API keys → Add API key**, choose the workspace with an active [Go plan](https://opencode.ai/docs/console/go/), and copy the [new personal key](https://opencode.ai/docs/console/api/#personal-api-keys). Save it in the **API key** field under **Settings → Providers → OpenCode**. A saved key takes priority over the CLI login and is stored in Windows Credential Manager. You can also set `OPENCODE_GO_API_KEY` before starting Tokenza.
+
+Existing workspace ID and session cookie settings remain available under **Legacy connection via cookie**. The `OPENCODE_GO_WORKSPACE_ID` and `OPENCODE_GO_AUTH_COOKIE` environment variables still work.
 
 </details>
 

@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-11-18
+
+### Added
+
+- Connect OpenCode Go with a Console API key from Settings → Providers. The OpenCode section links to the Console and key creation instructions and can check just that connection.
+
+### Fixed
+
+- OpenCode Go detects keys saved by recent CLI versions, uses the workspace from the CLI's Console login, and can fall back to an existing cookie connection when the CLI login expires. The flyout opens the OpenCode settings when the connection needs attention.
+
 ## [0.3.0] - 2026-10-31
 
 ### Added

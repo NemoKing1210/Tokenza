@@ -4,10 +4,11 @@ import { useStore } from "./store";
 import { t, type Key, type Lang } from "./i18n";
 import type { AuthScheme, CustomDef, CustomWindowDef } from "./types";
 import { PRESETS } from "./presets";
+import { ExternalLink } from "./controls";
 
 /** Credential fields of the built-in providers that accept a value typed into the app. Custom ones have a single token. */
 const BUILTIN_FIELDS: Record<string, string[]> = {
-  opencode: ["workspace_id", "cookie"],
+  opencode: ["api_key", "workspace_id", "cookie"],
   commandcode: ["api_key"],
 };
 
@@ -140,8 +141,42 @@ function BrowserSignIn({ lang }: { lang: Lang }) {
   );
 }
 
+const CHECK_ERRORS: Record<string, Key> = {
+  busy: "pending",
+  cooldown: "opencodeCooldown",
+  rate_limited: "rateTitle",
+  disabled: "off",
+};
+
+export function OpenCodeCheck({ lang, enabled, status }: { lang: Lang; enabled: boolean; status?: string }) {
+  const check = useStore((s) => s.checkOpenCode);
+  const lastAttempt = useStore((s) => s.data?.providers.find((p) => p.id === "opencode")?.last_attempt);
+  const [checking, setChecking] = useState(false);
+  const [notice, setNotice] = useState<{ key: Key; attempt: typeof lastAttempt } | null>(null);
+  const error = notice?.attempt === lastAttempt ? notice?.key : null;
+  const start = async () => {
+    setChecking(true);
+    setNotice(null);
+    const failure = await check();
+    setChecking(false);
+    if (failure) {
+      setNotice({ key: CHECK_ERRORS[failure] ?? "opencodeCheckFailed", attempt: lastAttempt });
+    }
+  };
+  return (
+    <>
+      <button type="button" className={status ? "btn btn-sm" : "link-btn"} disabled={!enabled || checking} onClick={() => void start()}>
+        {t(lang, checking ? "pending" : status ? "opencodeCheck" : "retry")}
+      </button>
+      <span className="dline-hint" role="status" hidden={!checking && !status && !error}>
+        {checking ? "" : error ? t(lang, error) : status}
+      </span>
+    </>
+  );
+}
+
 /** Credentials typed into the app for one provider, kept in the OS credential store. */
-export function ConnectSection({ id, secrets, lang }: { id: string; secrets: string[]; lang: Lang }) {
+export function ConnectSection({ id, secrets, lang, enabled, status }: { id: string; secrets: string[]; lang: Lang; enabled: boolean; status: string }) {
   const fields = secretFieldsFor(id);
   if (!fields.length) return null;
   const hint: Key = id === "opencode" ? "connectOpencode" : id === "commandcode" ? "connectCommandcode" : "connectCustom";
@@ -149,11 +184,31 @@ export function ConnectSection({ id, secrets, lang }: { id: string; secrets: str
     <div className="dgroup">
       <div className="dline-title">{t(lang, "provConnect")}</div>
       <div className="dline-hint">{t(lang, hint)}</div>
+      {id === "opencode" && (
+        <div className="secret-ctl">
+          <ExternalLink url="https://opencode.ai/console">{t(lang, "opencodeConsole")}</ExternalLink>
+          <ExternalLink url="https://opencode.ai/docs/console/api/#personal-api-keys">{t(lang, "opencodeDocs")}</ExternalLink>
+        </div>
+      )}
       <div className="dline-hint">{t(lang, "provConnectStore")}</div>
       {id === "commandcode" && <BrowserSignIn lang={lang} />}
-      {fields.map((f) => (
+      {(id === "opencode" ? fields.slice(0, 1) : fields).map((f) => (
         <SecretField key={f} id={id} field={f} isSet={secrets.includes(f)} lang={lang} />
       ))}
+      {id === "opencode" && (
+        <>
+          <div className="secret-ctl">
+            <OpenCodeCheck lang={lang} enabled={enabled} status={status} />
+          </div>
+          <details className="dline-hint">
+            <summary>{t(lang, "opencodeLegacy")}</summary>
+            <p>{t(lang, "opencodeCookieHint")}</p>
+            {fields.slice(1).map((f) => (
+              <SecretField key={f} id={id} field={f} isSet={secrets.includes(f)} lang={lang} />
+            ))}
+          </details>
+        </>
+      )}
     </div>
   );
 }

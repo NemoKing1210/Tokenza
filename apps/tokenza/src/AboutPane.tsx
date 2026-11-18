@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { inTauri } from "./store";
 import { t } from "./i18n";
 import type { Lang } from "./format";
-import { Row } from "./controls";
+import { ExternalLink as Link, Row } from "./controls";
 
 const REPO = "https://github.com/NemoKing1210/Tokenza";
 const AUTHOR = { name: "NemoKing", url: "https://github.com/NemoKing1210" };
@@ -14,23 +14,6 @@ interface AboutInfo {
 
 // Outside Tauri (UI dev in a browser) there is no backend to ask.
 const FALLBACK: AboutInfo = { version: "dev", license: "MIT" };
-
-async function openLink(url: string) {
-  if (!inTauri) {
-    window.open(url, "_blank", "noopener");
-    return;
-  }
-  const { invoke } = await import("@tauri-apps/api/core");
-  await invoke("open_url", { url }).catch(() => {});
-}
-
-function Link({ url, children }: { url: string; children: string }) {
-  return (
-    <button className="link-btn" onClick={() => void openLink(url)} title={url}>
-      {children}
-    </button>
-  );
-}
 
 export default function AboutPane({ lang, quit }: { lang: Lang; quit: () => void }) {
   const [info, setInfo] = useState<AboutInfo>(FALLBACK);

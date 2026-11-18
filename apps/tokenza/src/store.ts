@@ -22,10 +22,12 @@ interface Store {
   data: AppStateDto | null;
   /** True while a manual refresh is in flight. */
   refreshing: boolean;
+  providerSettings: { id: string } | null;
   /** Flyout lifecycle from the backend: "hidden" before it is shown, "shown" after. */
   flyout: { phase: "hidden" | "shown"; enter: number; /** Provider whose own tray icon opened the flyout; its card is highlighted. */ focus: string | null };
   init: () => Promise<void>;
   refresh: () => void;
+  checkOpenCode: () => Promise<string | null>;
   resetTuning: (id: string) => void;
   /** Resolves to an error message, or null when the toast was handed to Windows. */
   testNotification: () => Promise<string | null>;
@@ -42,7 +44,7 @@ interface Store {
   setHotkey: (accel: string) => Promise<string | null>;
   /** Tries a provider definition against its URL without saving it. */
   testCustom: (def: CustomDef, token: string | null) => Promise<{ windows: { label: string; used_pct: number | null }[] | null; error: string | null }>;
-  openSettings: () => void;
+  openSettings: (provider?: string) => void;
   hideFlyout: () => void;
   setFlyoutHeight: (h: number) => void;
   quit: () => void;
@@ -79,6 +81,7 @@ export const useStore = create<Store>((set, get) => {
   return {
     data: null,
     refreshing: false,
+    providerSettings: null,
     // Outside Tauri (browser preview) there is no window lifecycle, so the flyout is simply shown.
     flyout: { phase: inTauri ? "hidden" : "shown", enter: 1, focus: inTauri ? null : new URLSearchParams(location.search).get("focus") },
 
@@ -105,6 +108,7 @@ export const useStore = create<Store>((set, get) => {
         const cur = get().data;
         if (cur) set({ data: { ...cur, settings: e.payload } });
       });
+      await listen<string>("provider-settings", (e) => set({ providerSettings: { id: e.payload } }), { target: "settings" });
       await listen<string | null>("flyout-shown", (e) => set((s) => ({ flyout: { phase: "shown", enter: s.flyout.enter + 1, focus: e.payload ?? null } })));
       await listen("flyout-hidden", () => set((s) => ({ flyout: { ...s.flyout, phase: "hidden", focus: null } })));
       // Safety nets: if the show event fired before this listener existed (right after launch), or got lost,
@@ -127,6 +131,10 @@ export const useStore = create<Store>((set, get) => {
       spinTimer = setTimeout(() => set({ refreshing: false }), MAX_SPIN_MS);
       if (inTauri) void call("refresh");
       else stopSpin(); // browser preview: nothing to wait for
+    },
+
+    checkOpenCode() {
+      return inTauri ? attempt(() => call("check_opencode")) : Promise.resolve(null);
     },
 
     resetTuning(id) {
@@ -199,8 +207,8 @@ export const useStore = create<Store>((set, get) => {
       return attempt(() => call("set_hotkey", { accel }));
     },
 
-    openSettings() {
-      if (inTauri) void call("open_settings");
+    openSettings(provider) {
+      if (inTauri) void call("open_settings", { provider });
     },
     hideFlyout() {
       if (inTauri) void call("hide_flyout");

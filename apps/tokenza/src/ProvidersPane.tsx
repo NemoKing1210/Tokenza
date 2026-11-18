@@ -14,7 +14,7 @@ const SOURCES: Record<string, string> = {
   claude: "%USERPROFILE%\\.claude\\.credentials.json  →  api.anthropic.com",
   codex: "%USERPROFILE%\\.codex\\auth.json  →  chatgpt.com",
   cursor: "%APPDATA%\\Cursor\\…\\state.vscdb  →  cursor.com",
-  opencode: "OPENCODE_GO_WORKSPACE_ID + OPENCODE_GO_AUTH_COOKIE  →  opencode.ai",
+  opencode: "opencode.db / auth.json / OPENCODE_GO_API_KEY  →  opencode.ai",
   commandcode: "%USERPROFILE%\\.commandcode\\auth.json  →  api.commandcode.ai",
   devin: "%APPDATA%\\Devin\\credentials.toml  →  server.codeium.com",
   antigravity: "%USERPROFILE%\\.gemini\\antigravity-cli\\antigravity-oauth-token  →  cloudcode-pa.googleapis.com",
@@ -40,7 +40,7 @@ function statusOf(st: ProviderState | undefined, enabled: boolean, lang: Lang): 
     case "ok":
       return { tone: "ok", text: t(lang, "stOk") };
     case "not_found":
-      return { tone: "idle", text: t(lang, "notFoundTitle") };
+      return { tone: "idle", text: t(lang, st.id === "opencode" ? "connectTitle" : "notFoundTitle") };
     case "error":
       switch (st.error?.kind) {
         case "NotLoggedIn":
@@ -180,7 +180,7 @@ function ProviderRow(p: RowProps) {
       <div className="pdetail" inert={!p.open}>
         <div className="pdetail-inner">
           <div className="pdetail-body">
-            <ConnectSection id={pref.id} secrets={st?.secrets ?? []} lang={lang} />
+            <ConnectSection id={pref.id} secrets={st?.secrets ?? []} lang={lang} enabled={pref.enabled} status={status.text} />
 
             <div className="dline">
               <div className="dline-text">
@@ -269,6 +269,7 @@ interface Drag {
 export default function ProvidersPane() {
   const data = useStore((s) => s.data);
   const saveSettings = useStore((s) => s.saveSettings);
+  const providerSettings = useStore((s) => s.providerSettings);
   const [openId, setOpenId] = useState<string | null>(null);
   /** The add/edit form: a new provider, or the id of the one being edited. */
   const [form, setForm] = useState<{ edit: string | null } | null>(null);
@@ -276,6 +277,14 @@ export default function ProvidersPane() {
   const [instant, setInstant] = useState(false);
   const rows = useRef(new Map<string, HTMLDivElement>());
   const geo = useRef<{ rects: DOMRect[]; startY: number; gap: number } | null>(null);
+  const ready = data !== null;
+
+  useEffect(() => {
+    if (!providerSettings || !ready) return;
+    setOpenId(providerSettings.id);
+    const frame = requestAnimationFrame(() => rows.current.get(providerSettings.id)?.scrollIntoView({ block: "nearest" }));
+    return () => cancelAnimationFrame(frame);
+  }, [providerSettings, ready]);
 
   if (!data) return null;
   const s = data.settings;

@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperti
 import { selectLang, useCustomProviders, useStore } from "./store";
 import { t, type Key } from "./i18n";
 import { ProviderLogo } from "./Logo";
-import { secretFieldsFor } from "./Connect";
+import { OpenCodeCheck, secretFieldsFor } from "./Connect";
 import { EnterContext, useCountUp } from "./motion";
 import { useNow } from "./clock";
 import {
@@ -69,6 +69,8 @@ function CompactRow({ w, lang, now }: { w: UsageWindow; lang: Lang; now: number 
 
 export function CompactCard({ p, lang, now, index = 0, pref, focused = false }: { p: ProviderState; lang: Lang; now: number; index?: number; pref?: ProviderPref; focused?: boolean }) {
   const refresh = useStore((s) => s.refresh);
+  const openSettings = useStore((s) => s.openSettings);
+  const openCode = p.id === "opencode";
   const name = displayName(p.id, pref, useCustomProviders());
   const windows = visibleWindows(p, pref);
   const account = p.snapshot?.account === "claude.ai" ? "" : (p.snapshot?.account ?? "");
@@ -79,7 +81,8 @@ export function CompactCard({ p, lang, now, index = 0, pref, focused = false }: 
     status = (
       <div className="cstatus text-secondary">
         <SearchIcon size={16} />
-        <span>{t(lang, "notFoundTitle")}</span>
+        <span className="cstatus-title">{t(lang, openCode ? "connectTitle" : "notFoundTitle")}</span>
+        {openCode && <button className="link-btn" onClick={() => openSettings(p.id)}>{t(lang, "settings")}</button>}
       </div>
     );
   } else if (p.status === "pending") {
@@ -87,6 +90,7 @@ export function CompactCard({ p, lang, now, index = 0, pref, focused = false }: 
   } else if (p.status === "error") {
     const kind = p.error?.kind;
     const connect = kind === "NotLoggedIn" && secretFieldsFor(p.id).length > 0;
+    const needsSetup = openCode && (connect || kind === "TokenExpired" || kind === "NoSubscription");
     const [icon, tone, title] =
       kind === "NotLoggedIn" || kind === "TokenExpired"
         ? [<LockIcon size={16} />, "warning", t(lang, connect ? "connectTitle" : "loginTitle")]
@@ -98,12 +102,16 @@ export function CompactCard({ p, lang, now, index = 0, pref, focused = false }: 
             ? [<AlertIcon size={16} />, "warning", t(lang, "rateTitle")]
             : [<OfflineIcon size={16} />, "secondary", t(lang, "offlineTitle")];
     status = (
-      <div className="cstatus" role="status" title={t(lang, kind === "NoSubscription" ? "noSubHint" : kind === "SchemaChanged" ? "schemaHint" : connect ? "connectHint" : "offlineHint", { name }) + (kind === "SchemaChanged" && p.error ? ` (${p.error.message})` : "")}>
+      <div className="cstatus" role="status" title={t(lang, kind === "NoSubscription" ? "noSubHint" : kind === "SchemaChanged" ? "schemaHint" : connect ? "connectHint" : kind === "TokenExpired" ? "loginHint" : kind === "RateLimited" ? "rateHint" : "offlineHint", { name }) + (kind === "SchemaChanged" && p.error ? ` (${p.error.message})` : "")}>
         <span className={`text-${tone}`}>{icon}</span>
         <span className="cstatus-title">{title}</span>
-        <button className="link-btn" onClick={refresh}>
-          {t(lang, "retry")}
-        </button>
+        {needsSetup ? (
+          <button className="link-btn" onClick={() => openSettings(p.id)}>{t(lang, "settings")}</button>
+        ) : openCode ? (
+          <OpenCodeCheck lang={lang} enabled={p.enabled} />
+        ) : (
+          <button className="link-btn" onClick={refresh}>{t(lang, "retry")}</button>
+        )}
       </div>
     );
   }
@@ -223,7 +231,7 @@ export default function Flyout() {
           <RefreshIcon />
         </button>
         <span className="spacer" />
-        <button className="icon-btn" onClick={openSettings} aria-label={t(lang, "settings")} title={t(lang, "settings")}>
+        <button className="icon-btn" onClick={() => openSettings()} aria-label={t(lang, "settings")} title={t(lang, "settings")}>
           <GearIcon />
         </button>
       </footer>

@@ -5,10 +5,11 @@ use std::time::{Duration, Instant};
 
 use chrono::Utc;
 use tauri::{AppHandle, Emitter, Manager};
+use tokenza_core::providers::opencode::OpenCode;
 use tokenza_core::{all_providers, CustomDef, Provider, ProviderError, UsageSnapshot};
 
 use crate::adaptive::MAX_BACKOFF;
-use crate::state::{AppState, ErrorInfo};
+use crate::state::{AppState, ErrorInfo, ProviderState};
 use crate::{notify, tray};
 
 const TICK: Duration = Duration::from_secs(5);
@@ -23,6 +24,51 @@ const POLL_DEADLINE: Duration = Duration::from_secs(90);
 enum Outcome {
     NotFound,
     Fetched(Result<UsageSnapshot, ProviderError>),
+}
+
+/// Checks OpenCode from its settings without waking unrelated providers.
+pub async fn check_opencode(app: &AppHandle) -> Result<(), &'static str> {
+    let provider: Arc<dyn Provider> = Arc::new(OpenCode);
+    {
+        let state = app.state::<AppState>();
+        let mut g = state.lock();
+        if !g.settings.is_enabled(provider.id()) {
+            return Err("disabled");
+        }
+        let st = g
+            .providers
+            .iter_mut()
+            .find(|st| st.id == provider.id())
+            .ok_or("disabled")?;
+        check_allowed(st, Utc::now(), Instant::now())?;
+        st.in_flight = true;
+    }
+    let outcome = poll(provider.clone()).await;
+    finish(app, provider.id(), provider.min_interval(), outcome);
+    Ok(())
+}
+
+fn check_allowed(
+    st: &ProviderState,
+    now: chrono::DateTime<Utc>,
+    instant: Instant,
+) -> Result<(), &'static str> {
+    if st.in_flight {
+        return Err("busy");
+    }
+    if st.error.as_ref().is_some_and(|e| e.kind == "RateLimited")
+        && st.next_due.is_some_and(|due| due > instant)
+    {
+        return Err("rate_limited");
+    }
+    if st.last_attempt.is_some_and(|last| {
+        (now - last)
+            .to_std()
+            .is_ok_and(|elapsed| elapsed < MANUAL_COOLDOWN)
+    }) {
+        return Err("cooldown");
+    }
+    Ok(())
 }
 
 pub fn spawn(app: AppHandle) {
@@ -225,4 +271,32 @@ fn finish(app: &AppHandle, id: &str, min: Duration, outcome: Outcome) {
 pub fn publish(app: &AppHandle) {
     tray::refresh(app);
     let _ = app.emit("usage-updated", app.state::<AppState>().dto());
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn connection_check_respects_pending_polls_and_backoff() {
+        let now = Utc::now();
+        let instant = Instant::now();
+        let mut st = ProviderState::new("opencode", true);
+        assert_eq!(check_allowed(&st, now, instant), Ok(()));
+
+        st.in_flight = true;
+        assert_eq!(check_allowed(&st, now, instant), Err("busy"));
+        st.in_flight = false;
+
+        st.last_attempt = Some(now);
+        assert_eq!(check_allowed(&st, now, instant), Err("cooldown"));
+        let cooled = now + chrono::Duration::seconds(MANUAL_COOLDOWN.as_secs() as i64);
+        assert_eq!(check_allowed(&st, cooled, instant), Ok(()));
+
+        st.error = Some(ErrorInfo::from(&ProviderError::RateLimited(None)));
+        let due = instant + Duration::from_secs(300);
+        st.next_due = Some(due);
+        assert_eq!(check_allowed(&st, cooled, instant), Err("rate_limited"));
+        assert_eq!(check_allowed(&st, cooled, due), Ok(()));
+    }
 }
