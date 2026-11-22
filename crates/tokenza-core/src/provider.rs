@@ -24,5 +24,6 @@ pub fn all_providers() -> Vec<Box<dyn Provider>> {
         Box::new(providers::commandcode::CommandCode),
         Box::new(providers::devin::Devin),
         Box::new(providers::antigravity::Antigravity),
+        Box::new(providers::opendesign::OpenDesign),
     ]
 }

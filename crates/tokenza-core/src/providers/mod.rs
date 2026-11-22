@@ -6,6 +6,7 @@ pub mod cursor;
 pub mod custom;
 pub mod devin;
 pub mod opencode;
+pub mod opendesign;
 
 use std::path::PathBuf;
 use std::sync::OnceLock;
