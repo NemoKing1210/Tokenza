@@ -22,5 +22,7 @@ apps/tokenza/src-tauri/gen/
 .vscode/
 .idea/
 .claude/
+docs/superpowers/
+superpowers/
 .DS_Store
 Thumbs.db
