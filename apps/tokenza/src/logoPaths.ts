@@ -1,6 +1,6 @@
-// Brand marks from simple-icons (CC0 icon data), except Command Code (its site's pinned-tab icon) and Devin and
-// Antigravity (their sites' favicons); the marks themselves belong to Anthropic, OpenAI, Anysphere, Anomaly (OpenCode),
-// Command Code, Cognition (Devin) and Google (Antigravity).
+// Brand marks from simple-icons (CC0 icon data), except Command Code (its site's pinned-tab icon) and Devin,
+// Antigravity and Open Design (their sites' icons); the marks themselves belong to Anthropic, OpenAI,
+// Anysphere, Anomaly (OpenCode), Command Code, Cognition (Devin), Google (Antigravity) and the Open Design project.
 // The data lives in logos.json because the backend paints the same marks into the per-provider tray icons.
 // Each path is drawn on a 24x24 canvas (unless it names its own view box) and filled with currentColor.
 

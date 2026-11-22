@@ -16,7 +16,7 @@ fn legacy_schema() -> u32 {
 }
 
 /// Provider ids in default card order.
-pub const KNOWN_PROVIDERS: [&str; 7] = [
+pub const KNOWN_PROVIDERS: [&str; 8] = [
     "claude",
     "codex",
     "cursor",
@@ -24,6 +24,7 @@ pub const KNOWN_PROVIDERS: [&str; 7] = [
     "commandcode",
     "devin",
     "antigravity",
+    "opendesign",
 ];
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -366,6 +367,7 @@ impl Settings {
             "commandcode" => "Command Code",
             "devin" => "Devin",
             "antigravity" => "Antigravity",
+            "opendesign" => "Open Design",
             other => self
                 .custom_providers
                 .iter()
@@ -445,7 +447,8 @@ mod tests {
                 "opencode",
                 "commandcode",
                 "devin",
-                "antigravity"
+                "antigravity",
+                "opendesign"
             ]
         );
         assert!(!s.is_enabled("cursor"));
@@ -531,6 +534,7 @@ mod tests {
                 && s.notifies("claude")
         );
         assert_eq!(s.display_name("claude"), "Claude Code");
+        assert_eq!(s.display_name("opendesign"), "Open Design");
         let p = s.providers.iter_mut().find(|p| p.id == "claude").unwrap();
         p.hidden_windows = vec!["Week · Opus".into()];
         p.show_in_tray = false;

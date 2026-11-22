@@ -63,6 +63,7 @@ export const PROVIDER_NAMES: Record<string, string> = {
   commandcode: "Command Code",
   devin: "Devin",
   antigravity: "Antigravity",
+  opendesign: "Open Design",
 };
 
 /** Built-in name, or the name of a user-defined provider. */

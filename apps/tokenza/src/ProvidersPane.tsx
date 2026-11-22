@@ -18,9 +18,10 @@ const SOURCES: Record<string, string> = {
   commandcode: "%USERPROFILE%\\.commandcode\\auth.json  →  api.commandcode.ai",
   devin: "%APPDATA%\\Devin\\credentials.toml  →  server.codeium.com",
   antigravity: "%USERPROFILE%\\.gemini\\antigravity-cli\\antigravity-oauth-token  →  cloudcode-pa.googleapis.com",
+  opendesign: "%USERPROFILE%\\.amr\\config.json  →  amr-api.open-design.ai",
 };
 
-const DEFAULT_ORDER = ["claude", "codex", "cursor", "opencode", "commandcode", "devin", "antigravity"];
+const DEFAULT_ORDER = ["claude", "codex", "cursor", "opencode", "commandcode", "devin", "antigravity", "opendesign"];
 
 const hostOf = (url: string) => {
   try {

@@ -41,6 +41,7 @@ export function demoState(): AppStateDto {
         { id: "commandcode", enabled: true, interval_secs: null, show_in_tray: true, own_tray_icon: false, notify: true, hidden_windows: [], alias: null },
         { id: "devin", enabled: true, interval_secs: null, show_in_tray: true, own_tray_icon: false, notify: true, hidden_windows: [], alias: null },
         { id: "antigravity", enabled: true, interval_secs: null, show_in_tray: true, own_tray_icon: false, notify: true, hidden_windows: [], alias: null },
+        { id: "opendesign", enabled: true, interval_secs: null, show_in_tray: true, own_tray_icon: false, notify: true, hidden_windows: [], alias: null },
       ],
     },
     providers: [
@@ -99,6 +100,14 @@ export function demoState(): AppStateDto {
         snapshot: snap("antigravity", "", [
           { kind: "Session5h", label: "5 h · gemini-3-pro", used_pct: 58, resets_at: inMs(2 * H) },
           { kind: "Weekly", label: "Week · gemini-3-pro", used_pct: 21, resets_at: inMs(4 * 24 * H) },
+        ], 110_000),
+      },
+      {
+        id: "opendesign", enabled: true, status: "ok", error: null, secrets: [], last_attempt: ago(110_000),
+        poll: { interval_secs: 300, base_secs: 300, min_secs: 300, floor_secs: null, state: "steady", rate_limit_hits: 0, next_refresh_at: inMs(190_000) },
+        snapshot: snap("opendesign", "go", [
+          { kind: "Session5h", label: "5 h", used_pct: 41, resets_at: inMs(2 * H) },
+          { kind: "Weekly", label: "Week", used_pct: 27, resets_at: inMs(4 * 24 * H) },
         ], 110_000),
       },
     ],
