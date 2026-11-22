@@ -101,12 +101,13 @@ fn select_workspace(body: &Value) -> Option<String> {
             .and_then(Value::as_str)
             .filter(|id| !id.is_empty())
             .filter(|_| item.get("memberStatus").and_then(Value::as_str) == Some("active"))
-            .filter(|_| item.get("lifecycleState").and_then(Value::as_str) != Some("deleted"))
+            // A locked or past-due workspace must not be asked for limits: the gateway would
+            // answer 403 and the card would wrongly say the login expired.
+            .filter(|_| item.get("lifecycleState").and_then(Value::as_str) == Some("active"))
         else {
             continue;
         };
-        let personal = item.get("workspaceType").and_then(Value::as_str) == Some("personal")
-            && item.get("lifecycleState").and_then(Value::as_str) == Some("active");
+        let personal = item.get("workspaceType").and_then(Value::as_str) == Some("personal");
         if personal {
             return Some(id.to_owned());
         }
@@ -120,6 +121,10 @@ fn parse_windows(body: &Value) -> Result<Vec<UsageWindow>, ProviderError> {
     let Some(plan) = body.get("codingPlan").filter(|value| !value.is_null()) else {
         return Ok(Vec::new());
     };
+    let funding = body
+        .get("funding")
+        .and_then(Value::as_str)
+        .unwrap_or("coding_plan");
     let mut out = Vec::new();
     for window in plan
         .get("windows")
@@ -165,6 +170,13 @@ fn parse_windows(body: &Value) -> Result<Vec<UsageWindow>, ProviderError> {
         });
     }
     if out.is_empty() {
+        // Wallet and gateway accounts keep an empty `codingPlan` object rather than null.
+        if matches!(funding, "wallet" | "gateway") {
+            return Ok(Vec::new());
+        }
+        if plan.get("eligible").and_then(Value::as_bool) == Some(false) {
+            return Err(ProviderError::NoSubscription);
+        }
         return Err(ProviderError::SchemaChanged(
             "no recognized coding plan windows".into(),
         ));
@@ -301,6 +313,29 @@ mod tests {
     }
 
     #[test]
+    fn wallet_and_gateway_funding_with_empty_plan_are_not_errors() {
+        for funding in ["wallet", "gateway"] {
+            let body = serde_json::json!({
+                "funding": funding,
+                "codingPlan": {"eligible": false, "tier": null, "windows": []}
+            });
+            assert!(parse_windows(&body).unwrap().is_empty(), "{funding}");
+        }
+    }
+
+    #[test]
+    fn ineligible_coding_plan_is_no_subscription() {
+        let body = serde_json::json!({
+            "funding": "coding_plan",
+            "codingPlan": {"eligible": false, "tier": null, "windows": []}
+        });
+        assert!(matches!(
+            parse_windows(&body),
+            Err(ProviderError::NoSubscription)
+        ));
+    }
+
+    #[test]
     fn prefers_personal_active_workspace() {
         let body = serde_json::json!({"items": [
             {"workspaceId": "ws_team", "workspaceType": "team", "memberStatus": "active", "lifecycleState": "active"},
@@ -319,6 +354,21 @@ mod tests {
         ]});
         assert_eq!(select_workspace(&removed), None);
         assert_eq!(select_workspace(&serde_json::json!({"items": []})), None);
+    }
+
+    #[test]
+    fn skips_workspaces_that_are_not_active() {
+        let body = serde_json::json!({"items": [
+            {"workspaceId": "ws_locked", "workspaceType": "personal", "memberStatus": "active", "lifecycleState": "locked"},
+            {"workspaceId": "ws_past_due", "workspaceType": "team", "memberStatus": "active", "lifecycleState": "billing_past_due"},
+            {"workspaceId": "ws_team", "workspaceType": "team", "memberStatus": "active", "lifecycleState": "active"}
+        ]});
+        assert_eq!(select_workspace(&body).as_deref(), Some("ws_team"));
+
+        let none = serde_json::json!({"items": [
+            {"workspaceId": "ws_deleting", "workspaceType": "personal", "memberStatus": "active", "lifecycleState": "deleting"}
+        ]});
+        assert_eq!(select_workspace(&none), None);
     }
 
     fn config_file(dir: &std::path::Path, body: serde_json::Value) -> std::path::PathBuf {
