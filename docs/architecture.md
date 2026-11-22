@@ -26,7 +26,7 @@ Everything that knows about a specific AI agent lives here, and nothing here kno
 - `Provider` trait (`provider.rs`): `detect()` finds a local login without touching the network; `fetch()` calls the provider's usage endpoint and returns a `UsageSnapshot`.
 - Data model (`model.rs`): a snapshot is a list of `UsageWindow`s (5-hour session, weekly, monthly, credits), each with an optional used percentage and reset time. Snapshots never contain tokens.
 - `ProviderError` (`error.rs`): typed failures (`NotLoggedIn`, `TokenExpired`, `RateLimited`, `SchemaChanged`, `Offline`). The UI chooses the card text and the suggested action from the kind.
-- `providers/`: one module per agent (`claude`, `codex`, `cursor`, `opencode`, `commandcode`, `devin`, `antigravity`). Each reads its credentials per request, sends one HTTPS request to a single fixed domain, and parses the response into windows.
+- `providers/`: one module per agent (`claude`, `codex`, `cursor`, `opencode`, `commandcode`, `devin`, `antigravity`, `opendesign`). Each reads its credentials per request, sends one HTTPS request to a single fixed domain, and parses the response into windows.
 
 ### User-entered credentials and custom providers
 

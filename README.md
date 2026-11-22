@@ -26,7 +26,7 @@ A lightweight Windows tray app for Claude Code, Codex, Cursor and more.
 
 <br>
 
-Tokenza watches **Claude Code**, **Codex**, **Cursor**, **OpenCode** (Go plan), **Command Code**, **Devin** and **Antigravity**. Click the tray icon to see every limit window at a glance, and get a notification before you run out.
+Tokenza watches **Claude Code**, **Codex**, **Cursor**, **OpenCode** (Go plan), **Command Code**, **Devin**, **Antigravity** and **Open Design** (Coding Plan). Click the tray icon to see every limit window at a glance, and get a notification before you run out.
 
 > [!NOTE]
 > **Status:** early development (v0.1). Windows 10/11 only. Expect rough edges.
@@ -96,6 +96,7 @@ Tokenza is built to be easy to audit:
 | Command Code | `api.commandcode.ai`, `commandcode.ai` | `~/.commandcode/auth.json`, `COMMAND_CODE_API_KEY`, or the in-app browser sign-in (Credential Manager) |
 | Devin        | `server.codeium.com`           | `%APPDATA%\Devin\credentials.toml` (the CLI's API key)                                      |
 | Antigravity  | `cloudcode-pa.googleapis.com`  | `~/.gemini/antigravity-cli/antigravity-oauth-token` (read-only; unverified, see below)      |
+| Open Design  | `amr-api.open-design.ai`       | `~/.amr/config.json` (opened read-only)                                                     |
 
 Settings (thresholds, order, language, …) are stored in your user config directory as `settings.json` and contain no credentials.
 
@@ -214,8 +215,8 @@ Contributions are welcome: bug reports, new providers, translations and fixes. P
 
 ## Trademarks and acknowledgements
 
-Tokenza is an independent project and is **not affiliated with, endorsed by, or sponsored by** Anthropic, OpenAI, Anysphere (Cursor), Anomaly (OpenCode), Command Code, Cognition (Devin, Windsurf), Google (Antigravity) or Microsoft. Claude, Claude Code, Codex, ChatGPT, OpenAI, Cursor, OpenCode, Command Code, Devin, Antigravity and Windows are trademarks of their respective owners; they are used here only to identify the services Tokenza reads data from.
+Tokenza is an independent project and is **not affiliated with, endorsed by, or sponsored by** Anthropic, OpenAI, Anysphere (Cursor), Anomaly (OpenCode), Command Code, Cognition (Devin, Windsurf), Google (Antigravity), the Open Design project or Microsoft. Claude, Claude Code, Codex, ChatGPT, OpenAI, Cursor, OpenCode, Command Code, Devin, Antigravity, Open Design and Windows are trademarks of their respective owners; they are used here only to identify the services Tokenza reads data from.
 
-Provider logos come from [Simple Icons](https://simpleicons.org/) (CC0 icon data), except the Command Code, Devin and Antigravity marks, which are the icons published on their websites; the marks themselves remain the property of their owners.
+Provider logos come from [Simple Icons](https://simpleicons.org/) (CC0 icon data), except the Command Code, Devin, Antigravity and Open Design marks, which are the icons published on their websites; the marks themselves remain the property of their owners.
 
 Built with [Tauri](https://tauri.app/), [React](https://react.dev/), [Fluent UI](https://react.fluentui.dev/) and [tiny-skia](https://github.com/RazrFalcon/tiny-skia).
