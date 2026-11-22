@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-22
+
 ### Added
 
 - Open Design provider: shows the 5-hour and weekly Coding Plan credit windows of the account's personal workspace, read from the local AMR login in `~/.amr/config.json`.
