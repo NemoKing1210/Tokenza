@@ -374,7 +374,7 @@ fn apply_backdrops(app: &AppHandle, theme: &str) {
 }
 
 fn main() {
-    tauri::Builder::default()
+    let app = tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
             tray::show_flyout(app, None, None);
         }))
@@ -407,11 +407,7 @@ fn main() {
             open_url
         ])
         .setup(|app| {
-            let path = app.path().app_config_dir()?.join("settings.json");
-            secrets::install();
-            app.manage(AppState::new(path));
             let handle = app.handle().clone();
-            handle.state::<AppState>().load_secret_cache();
             let (want_autostart, theme) = {
                 let state = handle.state::<AppState>();
                 let g = state.lock();
@@ -457,6 +453,19 @@ fn main() {
             }
             _ => {}
         })
-        .run(tauri::generate_context!())
-        .expect("error while running Tokenza");
+        .build(tauri::generate_context!())
+        .expect("error while building Tokenza");
+
+    // Tauri creates the configured webviews before calling setup. Their IPC handlers
+    // can run during window creation, so register the state before starting the event loop.
+    let path = app
+        .path()
+        .app_config_dir()
+        .expect("could not resolve the Tokenza settings directory")
+        .join("settings.json");
+    secrets::install();
+    let state = AppState::new(path);
+    state.load_secret_cache();
+    app.manage(state);
+    app.run(|_, _| {});
 }

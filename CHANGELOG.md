@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-11-28
+
+### Fixed
+
+- Prevent an intermittent crash at Windows sign-in when the flyout requests a resize before application state is ready.
+- Center the content in the settings pane.
+
 ## [0.4.0] - 2026-11-22
 
 ### Added
